@@ -1,0 +1,842 @@
+#!/bin/sh
+#-*- tab-width: 8; -*-
+# ex:ts=8
+#
+# Copyright (c) 2015 Kazuhiko Kiriyama <kiri@OpenEdu.org>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
+if [ -z "$_osc_loaded" ]; then
+
+_osc_loaded="YES"
+
+
+automm()
+{
+	local	__chroot_cmd=""					\
+		__exclude_files					\
+		__function__=automm				\
+		__files						\
+		__file						\
+		__prefix=""
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			shift
+			__prefix=$1
+			__chroot_cmd="chroot $__prefix"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if [ -d $__prefix$_mmrootdir ]; then
+		runc chflags -R noschg $__prefix$_mmrootdir
+		runc rm -rf $__prefix$_mmrootdir
+	fi
+	runc $__chroot_cmd mergemaster -sat $_mmrootdir
+	__exclude_files=$(echo "$_exclude_mmfiles" | sed -Ee 's/[[:space:]]+/|/g')
+	if [ -d $__prefix$_mmrootdir ]; then
+		__files=$(find $__prefix$_mmrootdir -type f | egrep -v "$__exclude_files" | sed -e "s,^$__prefix$_mmrootdir,,")
+	fi
+	putdebug 1 0 __exclude_files
+	putdebug -v 1 1 __files
+	for __file in $__files; do
+		runc cp $__prefix$_mmrootdir$__file $__prefix$__file
+	done
+}
+
+check-osrel()
+{
+	local	__check_support=false				\
+		__function__=check-osrel			\
+		__osver						\
+		__osver_preamble				\
+		__target					\
+		__version=FreeBSD
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-i)
+			__target='installed'
+			putdebug 1 0 __target
+			;;
+		-m)
+			__version='major'
+			;;
+		-r)
+			__target='repositry'
+			;;
+		-s)
+			__check_support=true
+			;;
+		-v)
+			__version='FreeBSD'
+			;;
+		esac
+		shift	
+	done
+	putdebug 1 0 __target
+	if $__check_support; then
+		check-support
+	else
+		if [ -z "$__target" ]; then
+			error "target must be specified by '-i' or '-r'"
+		fi
+		case $__target in
+		installed)
+			case $__version in
+			major)
+				__osver=$(get-osversion)
+				: $((__osver_preamble = __osver / 100000))
+				__osver=$(sysctl -n kern.osreldate)
+				: $((__osver /= 100000))
+				;;
+			FreeBSD)
+				__osver=$(sysctl -n kern.osreldate)
+				__osver_preamble=$(get-osversion)
+				;;
+			esac
+			putdebug 1 0 __osver_preamble __osver
+			if [ $__osver_preamble -eq $__osver ]; then
+			   echo '='
+			elif [ $__osver_preamble -gt $__osver ]; then
+			   echo '>'
+			elif [ $__osver_preamble -lt $__osver ]; then
+			   echo '<'
+			fi
+			;;
+		repositry)
+			case $__version in
+			major)
+				__osver=$(get-osversion)
+				: $((__osver_preamble = __osver / 100000))
+				__osver=$(get-srcversion)
+				: $((__osver /= 100000))
+				;;
+			FreeBSD)
+				__osver=$(get-srcversion)
+				__osver_preamble=$(get-osversion)
+				;;
+			esac
+			if [ $__osver_preamble -eq $__osver ]; then
+			   echo '='
+			elif [ $__osver_preamble -gt $__osver ]; then
+			   echo '>'
+			elif [ $__osver_preamble -lt $__osver ]; then
+			   echo '<'
+			fi
+			;;
+		esac
+	fi
+}
+
+check-support()
+{
+	local	__function__=check-support
+
+	case $OSVersion in
+	[Cc][Uu][Rr][Rr][Ee][Nn][Tt])
+		__branch='head'
+		;;
+	[Ss][Tt][Aa][Bb][Ll][Ee])
+		__branch="stable/$RELEASE_VERSION"
+		;;
+	[Rr][Ee][Ll][Ee][Nn][Gg])
+		__branch="releng/$RELEASE_VERSION"
+		;;
+	[0-9]-[Ss][Tt][Aa][Bb][Ll][Ee]|[0-9][0-9]-[Ss][Tt][Aa][Bb][Ll][Ee])
+		__branch="stable/${OSVersion%%-*}"
+		;;
+	[0-9].[0-9]-[Rr][Ee][Ll][Ee][Nn][Gg]|[0-9][0-9].[0-9]-[Rr][Ee][Ll][Ee][Nn][Gg])
+		__branch="releng/${OSVersion%%-*}"
+		;;
+	*)
+		error "wrong version \"$OSVersion\""
+		;;
+	esac
+	if echo "$_releng_info" | egrep -we "^$__branch" | \
+			egrep -qe '\(not officially supported\)'; then
+		return 1
+	else
+		return 0
+	fi
+}
+
+eqsrcver()
+{
+	local	__function__=eqsrcver				\
+		__osversion					\
+		__srcversion
+
+	__osversion=$(sysctl -n kern.osreldate)
+	__srcversion=$(get-srcversion)
+	: $((__osversion /= 100))
+	: $((__srcversion /= 100))
+	if [ $__osversion -eq $__srcversion ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+get-freebsdname()
+{
+	local	__class=usual					\
+		__function__=get-freebsdname			\
+		__type						\
+		__version
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			__class=pattern
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__type=$1
+	__version=$2
+	case $__type in
+	isoimage)
+		case $__version in
+		[Cc][Uu][Rr][Rr][Ee][Nn][Tt])
+			case $__class in
+			pattern)
+				echo $INSTALLER_SNAPSHOT_IMAGE_PATTERN
+				;;
+			*)
+				;;
+			esac
+			;;
+		[Ss][Tt][Aa][Bb][Ll][Ee]|[Rr][Ee][Ll][Ee][Nn][Gg])
+			case $__class in
+			pattern)
+				echo $INSTALLER_RELEASE_IMAGE_PATTERN
+				;;
+			*)
+				;;
+			esac
+			;;
+		*)
+			error "unknown version '$__version'"
+			;;
+		esac
+		;;
+	*)
+		error "unknown type '$__type'"
+		;;
+	esac
+}
+
+get-freebsdsite()
+{
+	local	__function__=get-freebsdsite			\
+		__type=$1					\
+		__version=$2
+
+	case $__type in
+	isoimage)
+		case $__version in
+		[Cc][Uu][Rr][Rr][Ee][Nn][Tt])
+			echo $FREEBSD_SNAPSHOT_URL
+			;;
+		[Ss][Tt][Aa][Bb][Ll][Ee]|[Rr][Ee][Ll][Ee][Nn][Gg])
+			echo $FREEBSD_RELEASE_URL
+			;;
+		*)
+			error "unknown version '$__version'"
+			;;
+		esac
+		;;
+	*)
+		error "unknown type '$__type'"
+		;;
+	esac
+}
+
+get-osversion()
+{
+	local	__function__=get-osversion
+
+	case $OSVersion in
+	[Cc][Uu][Rr][Rr][Ee][Nn][Tt])
+		get-version -CURRENT
+		;;
+	[Ss][Tt][Aa][Bb][Ll][Ee])
+		get-version -STABLE
+		;;
+	[Rr][Ee][Ll][Ee][Nn][Gg])
+		get-version -RELENG
+		;;
+	[0-9]-[Ss][Tt][Aa][Bb][Ll][Ee]|[0-9][0-9]-[Ss][Tt][Aa][Bb][Ll][Ee])
+		__osrel=${OSVersion%%-*}
+		get-version -STABLE$__osrel
+		;;
+	[0-9].[0-9]-[Rr][Ee][Ll][Ee][Nn][Gg]|[0-9][0-9].[0-9]-[Rr][Ee][Ll][Ee][Nn][Gg])
+		__osrel=${OSVersion%%-*}
+		get-version -RELENG$__osrel
+		;;
+	*)
+		error "wrong version \"$OSVersion\""
+		;;
+	esac
+}
+
+get-relevel()
+{
+	echo "$OSName $(get-relversion)-$OSVersion"
+}
+
+get-relversion()
+{
+	local	__function__=get-relversion
+
+	case $OSName in
+	[Ff][Rr][Ee][Ee][Bb][Ss][Dd])
+		case $OSVersion in
+		[Cc][Uu][Rr][Rr][Ee][Nn][Tt])
+			putdebug 1 0 OSName OSVersion
+			echo -e "$_releng_info" | egrep -m1 -we "^head[[:space:]]+" | \
+				sed -Ee 's/^.*[[:space:]]+([0-9.]+)-CURRENT.*$/\1/'
+			;;
+		[Ss][Tt][Aa][Bb][Ll][Ee])
+			echo -e "$_releng_info" | egrep -m1 -we "^stable/[0-9]+" | \
+				sed -Ee 's/^.*[[:space:]]+FreeBSD ([0-9]+)-STABLE.*$/\1/'
+			;;
+		[Rr][Ee][Ll][Ee][Nn][Gg])
+			echo -e "$_releng_info" | egrep -m1 -we "^releng/[0-9.]+" | \
+				sed -Ee 's/^.*[[:space:]]+FreeBSD ([0-9.]+) .*$/\1/'
+			;;
+		*)
+			error "unknown OSVersion \"$OSVersion\""
+			;;
+		esac
+		;;
+	*)
+		error "unknown OSName \"$OSName\""
+		;;
+	esac
+}
+
+get-srcversion()
+{
+	awk '/^\#define[[:blank:]]__FreeBSD_version/ {print $3}' $SRCDIR/sys/sys/param.h
+}
+
+# get-version <-(CURRENT|STABLE[version]|RELENG[version])>
+# IMPORTS: _releng_info
+# RETURN: <serial-version>
+get-version()
+{
+	local	__function__=get-version			\
+		__major						\
+		__minor						\
+		__osrel						\
+		__osver						\
+		__osversion=$1
+
+	case $__osversion in
+	-[Cc]*)
+		__osrel=$(echo "$_releng_info" | egrep -we '^head' | \
+				sed -Ee 's/^.*[[:space:]]+([0-9.]+)-CURRENT.*$/\1/')
+		putdebug 1 0 __osrel
+		IFS='.'; set -- $__osrel; unset IFS
+		__major=$1
+		__minor=$2
+		echo $(((__major * 100 + __minor) * 1000))
+		;;
+	-[Ss]*[0-9]*)
+		__osver=${__osversion##${__osversion%%[0-9]*}}
+		__osrel=$(echo "$_releng_info" | egrep -m1 -we "^releng/$__osver\.[0-9]+" | \
+				sed -Ee 's/^.*[[:space:]]+FreeBSD ([0-9.]+) .*$/\1/')
+		IFS='.'; set -- $__osrel; unset IFS
+		__major=$1
+		__minor=$2
+		echo $(((__major * 100 + __minor) * 1000 + 500))
+		;;
+	-[Ss]*)
+		__osrel=$(echo "$_releng_info" | egrep -m1 -we "^releng/[0-9.]+" | \
+				sed -Ee 's/^.*[[:space:]]+FreeBSD ([0-9.]+) .*$/\1/')
+		IFS='.'; set -- $__osrel; unset IFS
+		__major=$1
+		__minor=$2
+		echo $(((__major * 100 + __minor) * 1000 + 500))
+		;;
+	-[Rr]*[0-9]*)
+		__osver=${__osversion##${__osversion%%[0-9]*}}
+		__osrel=$(echo "$_releng_info" | egrep -m1 -we "^releng/$__osver" | \
+				sed -Ee 's/^.*[[:space:]]+FreeBSD ([0-9.]+) .*$/\1/')
+		IFS='.'; set -- $__osrel; unset IFS
+		__major=$1
+		__minor=$2
+		echo $(((__major * 100 + __minor) * 1000))
+		;;
+	-[Rr]*)
+		__osrel=$(echo "$_releng_info" | egrep -m1 -we "^releng/[0-9.]+" | \
+				sed -Ee 's/^.*[[:space:]]+FreeBSD ([0-9.]+) .*$/\1/')
+		IFS='.'; set -- $__osrel; unset IFS
+		__major=$1
+		__minor=$2
+		echo $(((__major * 100 + __minor) * 1000))
+		;;
+	esac
+}
+
+get-versions()
+{
+	local	__function__=get-versions			\
+		__n						\
+		__releng_list					\
+		__tr						\
+		__trs
+
+	fetch -qm --no-verify-peer -o $TEMPDIR/releng.html http://www.freebsd.org/releng/index.html
+	__trs=$(sed -nE \
+		-e '/^[[:space:]]*<tr>[[:space:]]*$/,/^[[:space:]]*<\/tr>[[:space:]]*$/p' \
+		$TEMPDIR/releng.html)
+	_releng_info=''
+	: $((__n = $(echo "$__trs" | egrep -e '^[[:space:]]*<tr>[[:space:]]*$' | wc -l)))
+	while [ $__n -gt 0 ]; do
+		__tr=$(echo "$__trs" | sed -nEe '1,/^[[:space:]]*<\/tr>/p' | sed -Ee '1d' -e '$d')
+		if echo "$__tr" | egrep -qe '<[^>]+>head</[^>]+>|<[^>]+>stable/[0-9.]+</[^>]+>|<[^>]+>releng/[0-9.]+</[^>]+>'; then
+			__releng_list=$(echo "$__tr" | \
+						sed -Ee 's|^.*<[a-z]+[^>]*>([^<]+)</[a-z]+>.*$|\1\\\\t|g')
+			__releng_list=$(echo $__releng_list | sed -Ee 's|\\\\t$||')
+			if [ -z "$_releng_info" ]; then
+				_releng_info=$(printf "$__releng_list")
+			else
+				_releng_info=$(printf "%s\n$__releng_list\n" "$_releng_info")
+			fi
+		fi
+		__trs=$(echo "$__trs" | sed -Ee '1,/^[[:space:]]*<\/tr>/d')
+		: $((__n -= 1))
+	done
+}
+
+need-buildkernel()
+{
+	local	__function__=need-buildkernel
+
+	if [ -f $FILESDIR/$KERNCONF.diff ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+osupdate()
+{
+	local	__build_kernel=true				\
+		__build_world=true				\
+		__function__=osupdate				\
+		__mode=normal					\
+		__update_src=true				\
+		__vm_imagefile					\
+		__vm_name
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-k)
+			__build_kernel=false
+			;;
+		-s)
+			__update_src=false
+			;;
+		-v)
+			__mode=vm
+			shift
+			__vm_name=$1
+			;;
+		-w)
+			__build_world=false
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	vm)
+		if exists-vm -s $__vm_name; then
+			__vm_imagefile=$(get-vmimagepath $__vm_name)
+			putdebug 1 0 __vm_imagefile
+			if mount-image $__vm_imagefile; then
+				putdebug 1 1 __update_src __build_world _mntdir
+				$__update_src && src-update -p $_mntdir
+				if $__build_world; then
+					if empty -d $_mntdir$SRCDIR/sys; then
+						warror "'$_mntdir$SRCDIR/sys' empty"
+					else
+						chroot $_mntdir /bin/sh -c "runc(){
+						if $_dry_run; then
+							echo \"# \$@\"
+						else
+							eval \"\$@\"
+						fi
+						}
+						runc cd $SRCDIR
+						if ! runc make buildworld; then
+							error \"'make buildworld' failed with rtcode:$?\"
+						fi
+						if ! runc make installworld; then
+							error \"'make installworld' failed with rtcode:$?\"
+						fi"
+					fi
+				fi
+				if $__build_kernel; then
+					if empty -d $_mntdir$SRCDIR/sys; then
+						warror "'$_mntdir$SRCDIR/sys' empty"
+					else
+						if [ -f $FILESDIR/$KERNCONF.diff ]; then
+							(runc cd $_mntdir$SRCDIR
+							if ! runc patch -s \< $FILESDIR/$KERNCONF.diff; then
+								warror "patch '$FILESDIR/$KERNCONF.diff' strange"
+							fi)
+							if [ "$KERNCONF" != "GENERIC" ]; then
+								copy $_mntdir$SRCDIR/sys/$MACHINE_ARCH/conf/GENERIC $_mntdir$SRCDIR/sys/$MACHINE_ARCH/conf/$KERNCONF
+							fi
+						fi
+						chroot $_mntdir /bin/sh -c "runc(){
+						if $_dry_run; then
+							echo \"# \$@\"
+						else
+							eval \"\$@\"
+						fi
+						}
+						runc cd $SRCDIR
+						if ! runc make buildkernel KERNCONF=$KERNCONF; then
+							error \"'make buildkernel' failed with rtcode:$?\"
+						fi
+						if ! runc make installkernel KERNCONF=$KERNCONF; then
+							error \"'make installkernel' failed with rtcode:$?\"
+						fi"
+					fi
+				fi
+				$__build_world && automm -p $_mntdir
+				umount-image $__vm_imagefile
+			fi
+		fi
+		;;
+	*)
+		$__update_src && src-update
+		if $__build_world; then
+			if empty -d $SRCDIR; then
+				warror "'$SRCDIR/sys' empty"
+			else
+				(runc cd $SRCDIR
+				if ! runc make buildworld; then
+					error "'make buildworld' failed with rtcode:$?"
+				fi
+				if ! runc make installworld; then
+					error "'make installworld' failed with rtcode:$?"
+				fi)
+			fi
+		fi
+		if $__build_kernel; then
+			if empty -d $SRCDIR; then
+				warror "'$SRCDIR/sys' empty"
+			else
+				if [ -f $FILESDIR/$KERNCONF.diff ]; then
+					(runc cd $SRCDIR
+					if ! runc patch -s \< $FILESDIR/$KERNCONF.diff; then
+						warror "patch '$FILESDIR/$KERNCONF.diff' strange"
+					fi)
+					if [ "$KERNCONF" != "GENERIC" ]; then
+						copy $SRCDIR/sys/$MACHINE_ARCH/conf/GENERIC $SRCDIR/sys/$MACHINE_ARCH/conf/$KERNCONF
+					fi
+				fi
+				(runc cd $SRCDIR
+				if ! runc make buildkernel KERNCONF=$KERNCONF; then
+					error "'make buildkernel' failed with rtcode:$?"
+				fi
+				if ! runc make installkernel KERNCONF=$KERNCONF; then
+					error "'make installkernel' failed with rtcode:$?"
+				fi)
+			fi
+		fi
+		$__build_world && automm
+		;;
+	esac
+}
+
+patchf()
+{
+	local	__diff_file					\
+		__force=false					\
+		__file						\
+		__function__=patchf				\
+		__mode=normal					\
+		__vm_name					\
+		__vm_imagefile
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-f)
+			__force=ture
+			;;
+		-v)
+			__mode=vm
+			shift
+			__vm_name=$1
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	vm)
+		if exists-vm -s $__vm_name; then
+			__vm_imagefile=$(get-vmimagepath $__vm_name)
+			if mount-image $__vm_imagefile; then
+				for __file in $DIFFS; do
+					__diff_file=$FILESDIR/$(basename $__file).diff
+					if [ -f $__diff_file ]; then
+						if [ -f $_mntdir$__file ]; then
+							if ! $__force; then
+								warn "'$__diff_file' already applied"
+								continue
+							else
+								rm -f $_mntdir$__file.orig $_mntdir$__file.rej
+								backup $_mntdir$__file
+								cp $_mntdir$__file.org $_mntdir$__file
+							fi
+							(
+								runc cd $_mntdir$(dirname $__file)
+								if ! runc patch -s \< $__diff_file; then
+									warn "patch file strange, patch '$__diff_file' not applied"
+								fi
+							)
+						else
+							warn "'$_mntdir$__file' not exist, patch '$__diff_file' not applied"
+						fi
+					else
+						warn "'$__diff_file' not found, patch '$__diff_file' not applied"
+					fi
+			
+				done
+				umount-image $__vm_imagefile
+			fi
+		fi
+		;;
+	*)
+		for __file in $DIFFS; do
+			__diff_file=$FILESDIR/$(basename $__file).diff
+			if [ -f $__diff_file ]; then
+				if [ -f $_file ]; then
+					if ! $__force; then
+						warn "'$__diff_file' already applied"
+						continue
+					else
+						rm -f $__file.orig $__file.rej
+						backup $__file
+						cp $__file.org $__file
+					fi
+					(
+						runc cd $(dirname $__file)
+						if ! runc patch -s \< $__diff_file; then
+							warn "patch file strange, patch '$__diff_file' not applied"
+						fi
+					)
+				else
+					warn "'$__file' not exist, patch '$__diff_file' not applied"
+				fi
+			else
+				warn "'$__diff_file' not found, patch '$__diff_file' not applied"
+			fi
+	
+		done
+		;;
+	esac
+}
+
+postosupdate()
+{
+	local	__add_items					\
+		__file						\
+		__function__=postosupdate
+
+	for __file in $_restore_files; do
+		if [ -f $BACKUPDIR$__file ]; then
+			case $__file in
+			*/master.passwd)
+				__add_items="root admin"
+				;;
+			*/group)
+				__add_items="wheel operator admin"
+				;;
+			*/sshd_config)
+				__add_items="PermitRootLogin UsePAM"
+				;;
+			esac
+			merge -c -a "$__add_items" -f $BACKUPDIR$__file $__file
+		else
+			warn "'$BACKUPDIR$__file' not found. no update"
+		fi
+	done
+}
+
+src-update()
+{
+	local	__function__=src-update				\
+		__prefix=""					\
+		__svn_base_url=$SVN_ROOT_URL/base		\
+		__svn_src_url
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			shift
+			__prefix=$1
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $OSVersion in
+	[Cc][Uu][Rr][Rr][Ee][Nn][Tt])
+		__branch='head'
+		;;
+	[Ss][Tt][Aa][Bb][Ll][Ee])
+		__branch="stable/$RELEASE_VERSION"
+		;;
+	[Rr][Ee][Ll][Ee][Nn][Gg])
+		__branch="releng/$RELEASE_VERSION"
+		;;
+	[0-9]-[Ss][Tt][Aa][Bb][Ll][Ee]|[0-9][0-9]-[Ss][Tt][Aa][Bb][Ll][Ee])
+		__branch="stable/${OSVersion%%-*}"
+		;;
+	[0-9].[0-9]-[Rr][Ee][Ll][Ee][Nn][Gg]|[0-9][0-9].[0-9]-[Rr][Ee][Ll][Ee][Nn][Gg])
+		__branch="releng/${OSVersion%%-*}"
+		;;
+	*)
+		error "wrong version \"$OSVersion\""
+		;;
+	esac
+	__svn_src_url=$__svn_base_url/$__branch
+	if [ -d $__prefix$SRCDIR ]; then
+		if (svnlite info $__prefix$SRCDIR > /dev/null 2>&1) && eqsrcver; then
+			case $(check-osrel -r -m) in
+			'=')
+				if check-osrel -s; then
+					runc svnlite update $__prefix$SRCDIR
+				else
+					warn "\"$OSVersion\" not supported. recommend clean-update"
+					runc svnlite update $__prefix$SRCDIR
+				fi
+				;;
+			'>')
+				warn "major updating. no guarantee to make world successfully"
+				runc backup $__prefix$SRCDIR
+				runc rm -rf $__prefix$SRCDIR/*
+				if ! check-osrel -s; then
+					warn "\"$OSVersion\" not supported. recommend clean-update"
+				fi
+				runc svnlite checkout $__svn_src_url $__prefix$SRCDIR
+				;;
+			'<')
+				error "repositry OS version greater than OSVersion. can't downgrading'"
+				;;
+			esac
+		else
+			case $(check-osrel -i -m) in
+			'=')
+				if check-osrel -s; then
+					if [ -n "$(ls $__prefix$SRCDIR)" ]; then
+						runc backup $__prefix$SRCDIR
+						runc rm -rf $__prefix$SRCDIR
+					fi
+					runc svnlite checkout $__svn_src_url $__prefix$SRCDIR
+				else
+					error "\"$OSVersion\" not supported. recommend 'clean-update'"
+				fi
+				;;
+			'>')
+				warn "major updating. no guarantee to make world successfully"
+				runc backup $__prefix$SRCDIR
+				runc rm -rf $__prefix$SRCDIR
+				if check-osrel -s; then
+					runc svnlite checkout $__svn_src_url $__prefix$SRCDIR
+				else
+					warn "\"$OSVersion\" not supported. recommend clean-update"
+				fi
+				;;
+			'<')
+				error "installed OS version greater than OSVersion. can't downgrading'"
+				;;
+			esac
+		fi
+	else
+		case $(check-osrel -i -m) in
+		'=')
+			if check-osrel -s; then
+				runc svnlite checkout $__svn_src_url $__prefix$SRCDIR
+			else
+				error "\"$OSVersion\" not supported. recommend 'clean-update'"
+			fi
+			;;
+		'>')
+			warn "major updating. no guarantee to make world successfully"
+			if ! check-osrel -s; then
+				warn "\"$OSVersion\" not supported. recommend \`clean-update'"
+			fi
+			runc svnlite checkout $__svn_src_url $__prefix$SRCDIR
+			;;
+		'<')
+			error "installed OS version greater than OSVersion. can't downgrading'"
+			;;
+		esac
+	fi	
+}
+
+
+fi # [ -z "$_osc_loaded" ]
+
+_osc_loaded=:

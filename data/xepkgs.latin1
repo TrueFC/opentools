@@ -1,0 +1,64 @@
+latin1:\
+	1.0:\
+	editors:\
+	Meta port for latin1 XEmacs pacakges
+c-support:\
+	1.22:\
+	lang:\
+	Basic single-file add-ons for editing C code
+cc-mode:\
+	1.45:\
+	lang:\
+	C,C++,Objective-C,Java,CORBA IDL,Pike and AWK language support
+debug:\
+	1.18:\
+	devel:\
+	GUD, gdb, dbx debugging support
+dired:\
+	1.20:\
+	sysutils:\
+	Manage file systems
+edit-utils:\
+	2.43:\
+	editors:\
+	Miscellaneous editor extensions
+efs:\
+	1.34:\
+	net:\
+	Treat files on remote systems the same as local files
+fsf-compat:\
+	1.19:\
+	editors:\
+	FSF Emacs compatibility files
+mail-lib:\
+	1.80:\
+	mail:\
+	Fundamental lisp files for providing email support
+net-utils:\
+	1.56:\
+	net:\
+	Miscellaneous Networking Utilities
+os-utils:\
+	1.41:\
+	sysutils:\
+	Miscellaneous Operating System utilities
+prog-modes:\
+	2.20:\
+	lang:\
+	Support for various programming languages
+text-modes:\
+	1.98:\
+	textproc:\
+	Miscellaneous support for editing text files
+time:\
+	1.14:\
+	misc:\
+	Display time and date on the modeline
+xemacs-base:\
+	2.27:\
+	editors:\
+	Fundamental XEmacs support
+xemacs-devel:\
+	1.80:\
+	devel:\
+	Emacs Lisp developer support

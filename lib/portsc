@@ -1,0 +1,839 @@
+#!/bin/sh
+#-*- mode:sh; tab-width: 8; -*-
+# ex:ts=8
+#
+# Copyright (c) 2015 Kazuhiko Kiriyama <kiri@OpenEdu.org>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
+if [ -z "$_portsc_loaded" ]; then
+
+_portsc_loaded="YES"
+
+
+_f_portargs_awk='
+BEGIN {
+	args = ""
+}
+{
+	sub(/[[:space:]]*$/, "")
+	sub(/^[[:space:]]*/, "")
+	gsub(/[[:space:]]*,[[:space:]]*/, ",")
+	for (i = 1; i <= split($0, field, ","); i++) {
+		if (field[i] ~ /[^=]+=[^=]*/) {
+			args = args ? args" "field[i] : field[i]
+		} else {
+			args = args ? args" -D"field[i] : "-D"field[i]
+		}
+	}
+
+}
+END {
+	print args
+}'
+
+check-ports()
+{
+	local	__function__=check-ports			\
+		__port						\
+		__ports						\
+		__portname					\
+		__pkgname					\
+		__version					\
+		__version_installed
+
+	case $1 in
+	-i)
+		__ports=$(echo "$instructions" | egrep -v -e '^[[:space:]]*(#.*|%.*|)$')
+		putdebug -s 1 0 __ports
+		if [ -z "$__ports" ]; then
+			return 1
+		else
+			return 0
+		fi
+		;;
+	esac
+	__port=$1
+	__portname=$(portname $__port)
+	__pkgname=$(pkgname $__port)
+	__version=${__pkgname##${__portname}-}
+	__version_installed=$(pkg info -E $__portname 2> /dev/null)
+	__version_installed=${__version_installed##${__portname}-}
+	if pkg info -qE $__portname 2> /dev/null; then
+		case $(pkg version -t $__version_installed $__version 2> /dev/null) in
+		=)
+			echo 'equivalent'
+			;;
+		<)
+			echo 'upgrade'
+			;;
+		>)
+			echo 'downgrade'
+			;;
+		\?)
+			echo 'none'
+			;;
+		\!)
+			echo 'unknown'
+			;;
+		esac
+	else
+		echo 'new'
+	fi
+}
+
+expand-pportstree()
+{
+	local	__function__=expand-pportstree			\
+		__portsdir=$1
+
+	if [ -d $PPORTSDIR ]; then
+		runc copy -f -b -i $PPORTSDIR $__portsdir
+	else
+		if exists-instruction install ports; then
+			runc copy -f -b -i $_pportsdir $__portsdir
+		fi
+	fi
+}
+
+exists-instruction()
+{
+	local	__function__=exists-instruction			\
+		__section=$1					\
+		__instruction=$2
+
+	case $__section in
+	install)
+		putdebug 1 1 __section __instruction DAKEFILE
+		case $__instruction in
+		ports)
+			if egrep -q '^%install.*[[:alnum:]_]+/ports[[:space:]]*->[[:space:]]*ports' $DAKEFILE; then
+				putdebug 1 2 __section __instruction
+				_pportsdir=$(get-pportsdir)
+				putdebug 1 3 _pportsdir
+			else
+				msg "not found '$__instruction' in '$__section'"
+				return 1
+			fi
+			;;
+		*)
+			error "illegal instruction '$__instruction'"
+			;;
+		esac
+		;;
+	*)
+		error "unknown section '$__section'"
+		;;
+	esac
+}
+
+get-alldependslist()
+{
+	local	__port=$1
+
+	(cd $PORTSDIR/$__port; make -ki all-depends-list 2> /dev/null | egrep "^$PORTSDIR") | sed -Ee "s,^$PORTSDIR/,,"
+}
+
+get-alldependspackages()
+{
+	local	__mode						\
+		__packages=""					\
+		__port						\
+		__ports						\
+		__with_root_port=false
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			__mode=absolute_path
+			;;
+		-r)
+			__with_root_port=true
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__port=$1
+	if $__with_root_port; then
+		__ports="$__port $(get-alldependslist $__port)"
+	else
+		__ports=$(get-alldependslist $__port)
+	fi
+	for __port in $__ports; do
+		case $__mode in
+		absolute_path)
+			__pkgname=$PACKAGES/All/$(pkgname $__port)$PKGSUFX
+			;;
+		*)
+			__pkgname=$(pkgname $__port)
+		esac
+		__packages="$__packages${__packages:+ }$__pkgname"
+	done
+	echo $__packages
+}
+
+get-categories()
+{
+	local	__function__=get-categories			\
+		__portsdir					\
+		__mode=categories
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-x)
+			__mode=noncategories
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__portsdir=$1
+	case $__mode in
+	categories)
+		__regex_noncategories=$(echo $PORTS_NONCATEGORIES | \
+								sed -E  -e 's/\./\\\\./g' \
+									-e 's/\.\*/\\..*/g' \
+									-e 's/,/|/g' \
+									-e 's/^/^(/g' \
+									-e 's/$/)$/g')
+		putdebug 1 0 __portsdir __regex_noncategories
+		ls $__portsdir | sort | uniq | egrep -v "$__regex_noncategories"
+		;;
+	noncategories)
+		__noncategories=$(echo $PORTS_NONCATEGORIES | \
+								sed -E	-e 's/\.\*,//g' \
+									-e "s@,@ $__portsdir/@g" \
+									-e "s@^@$__portsdir/@g")
+		putdebug 1 0 __portsdir __noncategories
+		find $__noncategories -type f 2> /dev/null | sed -Ee "s@^$__portsdir/@@"
+		;;
+	esac
+}
+
+get-latestpkg()
+{
+	local	__mode=normal					\
+		__function__=get-latestpkg			\
+		__pkgconf
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__mode=check
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__portname=$1
+	case $__portname in
+	pkg)
+		__pkgconf=`cat <<-EOF
+		FreeBSD: {
+		  signature_type: "none"
+		}
+		EOF`
+		merge -c $PKGCONF __pkgconf
+		;;
+	esac
+	putdebug 1 0 PACKAGES __portname
+	if ls $PACKAGES/All/${__portname}-* > /dev/null 2>&1; then
+		case $__mode in
+		check)
+			return 0
+			;;
+		*)
+			ls $PACKAGES/All/${__portname}-* | sort | uniq | tail -1
+			;;
+		esac
+	else
+		return 1
+	fi
+}
+
+get-portargs()
+{
+	evar $@ | awk "$_f_portargs_awk"
+}
+
+get-pportsdir()
+{
+	local	__function__=get-pportsdir			\
+		__distname					\
+		__dkgorigin
+		
+	putdebug 1 1 DAKEFILE
+	__distname=$(awk '
+		BEGIN {
+			distname = ""
+			found = 0
+		}
+		{
+			if (/^%install[[:space:]]+/) {
+				sub(/^%install[[:space:]]+/, "")
+				for (i = 1;  i <= split($0, directive, /;/); i++) {
+					sub(/^[[:space:]]*/, "", directive[i])
+					sub(/[[:space:]]*$/, "", directive[i])
+					if (directive[i] ~ /^[[:alnum:]_]+\/ports[[:space:]]*->[[:space:]]*ports$/) {
+						distname = directive[i]
+						sub(/\/.*$/, "", distname)
+						found = 1
+						exit
+					}
+				}
+			}
+		}
+		END {
+			print distname
+			exit ! found
+		}' $DAKEFILE)
+	if [ $? -gt 0 ]; then
+		error "private ports directive not found in '%install'"
+	fi
+	putdebug 1 2 __distname
+	if egrep -q "^$__distname" $DKGINDEXFILE; then
+		__dkgorigin=$(awk -F\| "\$1~/^$__distname/{print \$4}" $DKGINDEXFILE)
+	else
+		error "unknown distname:'$__distname'"
+	fi
+	if [ -d $DISTSDIR/$__dkgorigin/ports ]; then
+		echo $DISTSDIR/$__dkgorigin/ports
+	else
+		error "'$DISTSDIR/$__dkgorigin/ports' not exists"
+	fi
+}
+
+get-wrkdirs()
+{
+	local	__function__=get-wrkdirs			\
+		__mode=work					\
+		__prefix=""					\
+		__wrkdirprefix
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			__mode=all
+			;;
+		-P)
+			__mode=prune
+			;;
+		-p)
+			shift
+			__prefix=$1
+			;;
+		-w)
+			__mode=work
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__wrkdirprefix=$__prefix$WRKDIRPREFIX
+	putdebug 1 0 __wrkdirprefix
+	if [ ! -d $__wrkdirprefix ]; then
+		echo ""
+		return 0
+	fi
+	case $__mode in
+	work)
+		ls $__wrkdirprefix | egrep -v "^(${PACKAGES#$WRKDIRPREFIX/}|${DISTDIR#$WRKDIRPREFIX/}|${PORTSDIR#$WRKDIRPREFIX/})$" | sed -Ee "s,^,$WRKDIRPREFIX/,"
+		;;
+	prune)
+		ls $__wrkdirprefix | egrep -v "^(${PACKAGES#$WRKDIRPREFIX/}|${DISTDIR#$WRKDIRPREFIX/})$" | sed -Ee "s,^,$WRKDIRPREFIX/,"
+		;;
+	all)
+		ls $__wrkdirprefix | sed -Ee "s,^,$WRKDIRPREFIX/,"
+		;;
+	esac
+}
+
+need-portbuild()
+{
+	local	__first_port					\
+		__function__=need-portbuild			\
+		__pkgname					\
+		__port						\
+		__portname
+
+	__first_port=$1
+	__port=$2
+	putdebug 1 0 __first_port
+	if ! portcorrect $__port; then
+		warn "'$__port' is strange. ignored."
+		return 1
+	fi
+	set-portbuild -p $__first_port
+	__portname=$(portname $__port)
+	__pkgname=$(pkgname $__port)
+	putdebug 1 1 _portbuild_mode
+	case $_portbuild_mode in
+	pkgbuilding)
+		_portbuild_make_target=package
+		putdebug 1 2 __first_port
+		if $__first_port; then
+			case $(check-ports $__port) in
+			none|unknown)
+				error "port '$__port' not found."
+				;;
+			*)
+				if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+					warn "'$__pkgname$PKGSUFX' already built"
+					return 1
+				else
+					return 0
+				fi
+				;;
+			esac
+		else
+			_portbuild_make_args=''
+			putdebug 1 3 __port
+			case $(check-ports $__port) in
+			none|unknown)
+				error "port '$__port' not found."
+				;;
+			*)
+				putdebug 1 4 __port
+				if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+					msg "'$__pkgname$PKGSUFX' already exist"
+					return 1
+				else
+					return 0
+				fi
+				;;
+			esac
+		fi
+		;;
+	pkgrebuilding)
+		if $__first_port; then
+			case $(check-ports $__port) in
+			none|unknown)
+				error "port '$__port' not found."
+				;;
+			*)
+				runc rm -f $(get-alldependspackages -a)
+				_portbuild_make_target=package-recursive
+				return 0
+				;;
+			esac
+		else
+			_portbuild_make_args=''
+			case $(check-ports $__port) in
+			none|unknown)
+				error "port '$__port' not found."
+				;;
+			*)
+				if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+					msg "'$__pkgname$PKGSUFX' already exist"
+					return 1
+				else
+					_portbuild_make_target=package
+					return 0
+				fi
+				;;
+			esac
+		fi
+		;;
+	normal)
+		_portbuild_make_target=install
+		_portbuild_make_args=''
+		return 0
+		;;
+	esac
+}
+
+pkg-install()
+{
+	if ! pkg -N > /dev/null 2>&1; then
+		putdebug 1 0 PACKAGES
+		if get-latestpkg -c pkg; then
+			runc -f pkg add $(get-latestpkg pkg)
+			putdebug 1 1 PACKAGES
+		else
+			runc -f cd $PORTSDIR/ports-mgmt/pkg\; make package
+		fi
+	fi
+}
+
+pkgname()
+{
+	local	__port=$1
+
+	(cd $PORTSDIR/$__port; make -V PKGNAME)
+}
+
+portbuild()
+{
+	local	__args						\
+		__function__=portbuild				\
+		__port
+
+	__port=$1
+	__args=$2
+	if ! portcorrect $__port; then
+		warn "'$__port' is strange. ignored."
+		return 1
+	fi
+	putdebug 1 1 _portbuild_mode
+	set-portbuild "$__args"
+	case $_portbuild_mode in
+	pkgbuilding)
+		_portbuild_make_target=package
+		case $(check-ports $__port) in
+		none|unknown)
+			error "port '$__port' not found."
+			;;
+		*)
+			portsbuild $__port
+			;;
+		esac
+		;;
+	pkgrebuilding)
+		_portbuild_make_target=package
+		case $(check-ports $__port) in
+		none|unknown)
+			error "port '$__port' not found."
+			;;
+		*)
+			runc rm -f $(get-alldependspackages -a -r $__port)
+			portsbuild $__port
+			;;
+		esac
+		;;
+	normal)
+		_portbuild_make_target=install
+		portinstall $__port
+		;;
+	esac
+}
+
+
+portcorrect()
+{
+	local	__port=$1
+
+	if (cd $PORTSDIR/$__port; make -V PKGNAME) > /dev/null 2>&1; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+portinstall()
+{
+	local	__function__=portinstall			\
+		__mode=normal					\
+		__pkgname					\
+		__port=$1
+	
+	putdebug 1 0 __port
+	__pkgname=$(pkgname $__port)
+	putdebug 1 1 __pkgname _portbuild_mode
+	case $_portbuild_mode in
+	pkgbuilding|pkgrebuilding)
+		runc cd $PORTSDIR/$__port\; make $_portbuild_make_args $_portbuild_make_target
+		putdebug 1 2 _portbuild_make_args _portbuild_make_target
+		;;
+	*)
+		if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+			if ! runc pkg add $PACKAGES/All/$__pkgname$PKGSUFX; then
+				error "pkg add '$__pkgname$PKGSUFX' failed"
+			fi
+		else
+			runc cd $PORTSDIR/$__port\; make $_portbuild_make_args $_portbuild_make_target
+		fi
+		;;
+	esac
+}
+
+portname()
+{
+	local	__port=$1
+
+	(cd $PORTSDIR/$__port; make -V PORTNAME)
+}
+
+portspreupdate()
+{
+	local	__file_type=mkdir				\
+		__function__=portspreupdate			\
+		__destdir=""					\
+		__make_conf=true				\
+		__make_distfiles_dir=true			\
+		__merge_lines					\
+		__make_packages_dir=true			\
+		__make_portbuild_dir=true			\
+		__prefix=""
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__make_conf=false
+			;;
+		-d)
+			__make_distfiles_dir=false
+			;;
+		-k)
+			__make_packages_dir=false
+			;;
+		-p)
+			__make_portbuild_dir=false
+			;;
+		-P)
+			shift
+			__prefix=$1
+			;;
+		-s)
+			shift
+			__destdir=$1
+			__file_type=symlink
+			;;
+		esac
+		shift	
+	done
+	if $__make_portbuild_dir; then
+		runc mkdir -p $__prefix$WRKDIRPREFIX $__prefix$PORTSDIR $__prefix$PORTSREPO
+	fi
+	if $__make_distfiles_dir; then
+		case $__file_type in
+		mkdir)
+			runc mkdir -p $__prefix$DISTDIR
+			;;
+		symlink)
+			runc ln -hfs $__destdir$DISTDIR $__prefix$DISTDIR
+			;;
+		esac
+	fi
+	if $__make_packages_dir; then
+		case $__file_type in
+		mkdir)
+			runc mkdir -p $__prefix$PACKAGES
+			;;
+		symlink)
+			runc ln -hfs $__destdir$PACKAGES $__prefix$PACKAGES
+			;;
+		esac
+	fi
+	if $__make_conf; then
+		if [ -d $__prefix$WRKDIRPREFIX         -a	\
+				-d $__prefix$PORTSDIR  -a	\
+				-d $__prefix$PORTSREPO -a	\
+				-d $__prefix$DISTDIR   -a	\
+				-d $__prefix$PACKAGES ]; then
+		 	if [ ! -f $__prefix/etc/make.conf ]; then
+				runc touch $__prefix/etc/make.conf
+			fi
+			__merge_lines=`cat <<- EOF
+				PORTSDIR?=		$PORTSDIR
+				INDEXDIR?=		$INDEXDIR
+				WRKDIRPREFIX?=		$WRKDIRPREFIX
+				PACKAGES?=		$PACKAGES
+				DISTDIR?=		$DISTDIR
+				BATCH?=			$BATCH
+				DEFAULT_VERSIONS=	$DEFAULT_VERSIONS
+				COMPILER_TYPE=		$COMPILER_TYPE
+				USE_PACKAGE_DEPENDS=	$USE_PACKAGE_DEPENDS
+				.export USE_PACKAGE_DEPENDS
+				DISABLE_VULNERABILITIES=$DISABLE_VULNERABILITIES
+				OVERRIDE_LINUX_NONBASE_PORTS=$OVERRIDE_LINUX_NONBASE_PORTS
+				EOF`
+			runc merge-makefile -c $__prefix/etc/make.conf __merge_lines
+		fi
+	fi
+}
+
+portpremake()
+{
+	local	__function__=portpremake
+
+	portsprune
+	pkg-install
+	test -n "$PORTSWRKDIRS" && runc mkdir -p $PORTSWRKDIRS
+}
+
+portsbuild()
+{
+	local	__function__=portsbuild				\
+		__pkgname					\
+		__port=$1					\
+		__ports						\
+		__rpkgname
+
+	__rpkgname=$(pkgname $__port)
+	if [ -f $PACKAGES/All/$__rpkgname$PKGSUFX ]; then
+		printf "%-72s\n" ":===> $__rpkgname already built. skipped"
+		return 0
+	else
+		putime -s portsbuild
+		printf "%-42s%-30s\n" ":===> Building $__rpkgname start" "$(putime)"
+		portpremake
+		if ! portinstall $__port; then
+			error "$__rpkgname build failed"
+		fi
+		__ports=$(get-alldependslist $__port)
+		_portbuild_make_args=''
+		for __port in $__ports; do
+			__pkgname=$(pkgname $__port)
+			if [ ! -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+				if ! portinstall $__port; then
+					error "$__pkgname build failed"
+				fi
+			fi
+		done
+		putime -e portsbuild
+		printf "%-42s%-30s\n" ":<=== Building $__rpkgname end" "$(putime) ($(putime -i portsbuild))"
+	fi
+}
+
+portsprune()
+{
+	runc pkg delete -afy
+	runc rm -rf $LOCALBASE/\*
+	__wrkdirs="$(get-wrkdirs -w)"
+	if [ -n "$__wrkdirs" ]; then
+		runc rm -rf $__wrkdirs
+	fi
+}
+
+portsupdate()
+{
+	local	__function__=portsupdate			\
+		__nfs_mount=false				\
+		__prune=false					\
+		__repositry=false				\
+		__runc_args_crptr=""				\
+		__svn_ports_url=$SVN_ROOT_URL/ports/head
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__runc_args_crptr='-f'
+			;;
+		-n)
+			__nfs_mount=true
+			;;
+		-p)
+			__prune=true
+			;;
+		-r)
+			__repositry=true
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+		break
+			;;
+		esac
+		shift
+	done
+	if $__nfs_mount; then
+		portspreupdate -d -k
+	else
+		portspreupdate
+	fi
+	if $__repositry; then
+		if [ -d $PORTSREPO ]; then
+			if svnlite info $PORTSREPO > /dev/null 2>&1; then
+				runc svnlite update $PORTSREPO
+			else
+				runc backup $PORTSREPO
+				runc rm -rf $PORTSREPO/*
+				runc svnlite checkout $__svn_ports_url $PORTSREPO
+			fi
+		else
+			runc svnlite checkout $__svn_ports_url $PORTSREPO
+		fi
+	fi
+	putdebug 1 0 __prune PORTSREPO PORTSDIR
+	if $__prune; then
+		portsprune
+		runc rm -rf $PORTSDIR
+		portspreupdate -c -d -k 
+		expand-pportstree $PORTSDIR
+	fi
+	runc $__runc_args_crptr $DAKEDIR/bin/create-portstree $PORTSREPO $PORTSDIR
+}
+
+prep-portsbuild()
+{
+	local	__function__=prep-portsbuild			\
+		__wrkdirs
+
+	if check-ports -i; then
+		if [ -n "$WRKDIRPREFIX" ]; then
+			__wrkdirs="$(get-wrkdirs)"
+			if [ -n "$__wrkdirs" ]; then
+				runc -f rm -rf $__wrkdirs
+			fi
+		else
+			runc -f find $PORTSDIR -name "work" -type d -exec rm -rf \{} \;
+		fi
+		pkg-install
+#		portbuild "ports-mgmt/portupgrade" ""
+	fi
+}
+
+set-portbuild()
+{
+	if [ $# -lt 1 ]; then
+		case $PKGBUILDING in
+		[Yy][Ee][Ss])
+			_portbuild_mode=pkgbuilding
+			;;
+		esac
+		case $PKGREBUILDING in
+		[Yy][Ee][Ss])
+			_portbuild_mode=pkgrebuilding
+			;;
+		esac
+	elif [ $# -lt 2 ]; then
+		_portbuild_make_args=$(get-portargs $1)
+	else
+		error "too many arguments"
+	fi
+}
+
+
+fi # [ -z "$_portsc_loaded" ]
+
+_portsc_loaded=:

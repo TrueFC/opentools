@@ -1,0 +1,48 @@
+mule:\
+	1.0:\
+	editors:\
+	Meta port for Mule XEmacs pacakges
+ddskk:\
+	1.10:\
+	japanese:\
+	Daredevil SKK (Simple Kana to Kanji conversion program)
+edict:\
+	1.17:\
+	japanese:\
+	Lisp Interface to EDICT, Kanji Dictionary
+egg-its:\
+	1.27:\
+	japanese:\
+	Wnn (4.2 and 6) support. SJ3 support
+latin-euro-standards:\
+	1.09:\
+	editors:\
+	Support for the Latin{7,8,9,10} character sets and coding systems
+latin-unity:\
+	1.20:\
+	editors:\
+	Find single ISO 8859 character set to encode a buffer
+leim:\
+	1.31:\
+	editors:\
+	Quail. All non-English and non-Japanese language support
+locale:\
+	1.28:\
+	editors:\
+	Localized menubars and localized splash screens
+lookup:\
+	1.15:\
+	misc:\
+	Mule Dictionary support
+mule-base:\
+	1.56:\
+	editors:\
+	Basic Mule support
+mule-ucs:\
+	1.18:\
+	editors:\
+	Extended coding systems(including Unicode) for XEmacs
+#skk:\
+#	1.24:\
+#	japanese:\
+#	Japanese Language Input Method

@@ -1,0 +1,25 @@
+#########################################################################
+###                                                                   ###
+###    Local setting for mail relevant scripts                        ###
+###                                                                   ###
+#########################################################################
+
+###
+### Mailprc
+###
+
+## Inbox directory
+MAILPRC_INBOXDIR=${HOME}/Mail/inbox
+
+## IMAP/POP server
+#MAILPRC_SERVER=
+
+## User name belong to IMAP/POP server
+#MAILPRC_USER=
+
+## Protocol of IMAP/POP server.
+##    Each protocol shuold be specified by `protocol/method'.
+##    POP's protocol is `pop[/APOP|/RPOP|/POP]',
+##    IMAP's protocol is `imap[/AUTH|/LOGIN]' or `imap%folder[//AUTH|//LOGIN]'
+##    `local[:mailbox|:maidir]' for local fetch.
+#MAILPRC_PROTOCOL=

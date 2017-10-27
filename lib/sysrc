@@ -1,0 +1,1511 @@
+#!/bin/sh
+#-*- mode:sh; tab-width: 8; -*-
+#
+# Copyright (c) 2015 Kazuhiko Kiriyama <kiri@OpenEdu.org>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
+if [ -z "$_sysrc_loaded" ]; then
+
+_sysrc_loaded="YES"
+
+
+_f_get_makevar_awk='
+BEGIN {
+	clines      = ""
+	value       = ""
+	continuous  = 0
+	found       = 0
+}
+{
+	if ($0 !~ /^([[:space:]]*#.*|[[:space:]]*)$/) {
+		if ($0 !~ /\\[[:space:]]*$/) {
+			if (continuous) {
+				clines = clines ? clines"\n"$0 : $0
+				nclines = split(clines, cline, /\n/)
+				line = ""
+				for (ncline = 1; ncline <= nclines; ncline++) {
+					sub(/^\t*/, "", cline[ncline])
+					sub(/\\[[:space:]]*$/, "", cline[ncline])
+					line = line ? line""cline[ncline] : cline[ncline]
+				}
+				clines = ""
+				continuous = 0
+			} else {
+				line = $0
+			}
+		} else {
+			clines = clines ? clines"\n"$0 : $0
+			continuous = 1
+			next
+		}
+		svar = line
+		sub(/[[:space:]]*[\!|\?|\+|:]?=.*$/, "", svar)
+		sub(/^[[:space:]]*/, "", svar)
+		svalue = line
+		sub(/^[^[:space:]]+[[:space:]]*[\!|\?|\+|:]?=[[:space:]]*/, "", svalue)
+		sub(/([[:space:]]*#.*|[[:space:]]*)$/, "", svalue)
+		if (svar == var) {
+			value = svalue
+			found = 1
+			exit
+		}
+	}
+}
+END {
+	if (found) {
+		print value
+	}
+	exit ! found
+}'
+
+_f_merge_freebsd_conf_awk='
+BEGIN {
+	sub(/[[:space:]]*$/, "", lines)
+	sub(/^[[:space:]]*/, "", lines)
+	nalines     = split(lines, aline, /\n/)
+	for (i = 1; i <= nalines; i++) {
+		if (aline[i] ~ /^[[:space:]]*[[:alnum:]_]+[[:space:]]*:[[:space:]]*\{/) {
+			key = aline[i]
+			sub(/^[[:space:]]*/, "", key)
+			sub(/[[:space:]]*:.*$/, "", key)
+			break
+		}
+	}
+	found       = 0
+	found_end   = 0
+	found_aline = 0
+	dlines      = ""
+	ndlines     = 0
+	slines      = ""
+	shead       = ""
+	sbody       = ""
+	stail       = ""
+	append      = 1
+	modified    = 0
+	replaced    = 0
+	commentout  = commentout ? commentout : 0
+}
+{
+	sline = $0
+	if (found) {
+		if (sline ~ /^[[:space:]]*\}[[:space:]]*$/) {
+			found = 0
+			found_end = 1
+		}
+	} else {
+		shead = shead ? shead "\n" sline : sline
+	}
+	if (found_end) {
+		stail = stail ? stail "\n" sline : sline
+	}
+	if (found) {
+		if (sline !~ /^[[:space:]]*$/) {
+			if (commentout) {
+				commentouted = sline ~ /^[[:space:]]*#/ ? 1 : 0
+				sub(/^[[:space:]]*#/, "", sline)
+			} else {
+				commentouted = 0
+			}
+			if (sline !~ /^[[:space:]]*#.*$/) {
+				svar = sline
+				sub(/:.*$/, "", svar)
+				sub(/^[[:space:]]*/, "", svar)
+				svalue = sline
+				sub(/^.*:/, "", svalue)
+				sub(/([[:space:]]*,?#.*|[[:space:]]*,?[[:space:]]*)$/, "", svalue)
+				found_aline = 0
+				for (naline = 1; naline <= nalines; naline++) {
+					if (! aline[naline]) { continue }
+					if (found_aline) {
+						if (aline[naline] ~ /^[[:space:]]*\}[[:space:]]*$/) {
+							found_aline  = 0
+						}
+					}
+					if (found_aline) {
+						if (aline[naline] ~ /^([[:space:]]*#.*|[[:space:]]*)$/) {
+							continue
+						}
+						avar = aline[naline]
+						sub(/:.*$/, "", avar)
+						sub(/^[[:space:]]*/, "", avar)
+						avalue = aline[naline]
+						sub(/^.*:/, "", avalue)
+						sub(/([[:space:]]*,?#.*|[[:space:]]*,?[[:space:]]*)$/, "", avalue)
+						if (svar == avar) {
+							dlines = dlines ? dlines" "naline : naline
+							if (svalue != avalue || commentouted) {
+								sline = aline[naline]
+								modified = 1
+								replaced = 1
+								break
+							}
+						}
+					}
+					if (aline[naline] ~ "^[[:space:]]*" key "[[:space:]]*:[[:space:]]*\{") {
+						found_aline  = 1
+					}
+				}
+				if (replaced) {
+					delete aline[naline]
+				} else {
+					sline = $0
+				}
+				replaced = 0
+			} else {
+				sline = $0
+			}
+		}
+		sbody = sbody ? sbody"\n"sline : sline
+	}
+	if (sline ~ "^[[:space:]]*" key "[[:space:]]*:[[:space:]]*\{") {
+		found = 1
+	}
+}
+END {
+	if (dlines) {
+		ndlines = split(dlines, dline, / /)
+	}
+	found = 0
+	for (naline = 1; naline <= nalines; naline++) {
+		if (found) {
+			if (aline[naline] ~ /^[[:space:]]*\}[[:space:]]*$/) {
+				found  = 0
+				append = 0
+			}
+		}
+		if (found) {
+			if (ndlines > 0) {
+				for (ndline in dline) {
+					if (naline == dline[ndline]) {
+						append = 0
+						break
+					}
+				}
+			}
+		}
+		if (aline[naline] ~ "^[[:space:]]*" key "[[:space:]]*:[[:space:]]*\{") {
+			found  = 1
+			append = 0
+		}
+		if (append) {
+			sbody = sbody ? sbody"\n"aline[naline] : aline[naline]
+			modified = 1
+		}
+		append = 1
+	}
+	nsbody = split(sbody, line, /\n/)
+	sbody = ""
+	for (i = 1; i <= nsbody; i++) {
+		if (i < nsbody) {
+			if (line[i] !~ /[^#[:space:]]+,([[:space:]]*|[[:space:]]*#.*)$/ &&
+					line[i] !~ /^([[:space:]]*|[[:space:]]*#.*)$/) {
+				comment = line[i]
+				sub(/([[:space:]]*|[[:space:]]*#.*)$/, "", line[i])
+				sub("^" line[i], "", comment)
+				cline = line[i] "," comment
+				sbody = sbody ? sbody"\n"cline : cline
+			} else {
+				sbody = sbody ? sbody"\n"line[i] : line[i]
+			}
+		} else {
+			if (line[i] ~ /[^#[:space:]]+,([[:space:]]*|[[:space:]]*#.*)$/ &&
+					line[i] !~ /^([[:space:]]*|[[:space:]]*#.*)$/) {
+				comment = line[i]
+				sub(/,([[:space:]]*|[[:space:]]*#.*)$/, "", line[i])
+				sub("^" line[i] ",", "", comment)
+				cline = line[i] comment
+				sbody = sbody ? sbody"\n"cline : cline
+			} else {
+				sbody = sbody ? sbody"\n"line[i] : line[i]
+			}
+		}
+	}
+	slines = shead "\n" sbody "\n" stail
+	print slines
+	exit ! modified
+}'
+
+_f_merge_fstab_awk='
+BEGIN {
+	sub(/[[:space:]]*$/, "", lines)
+	sub(/^[[:space:]]*/, "", lines)
+	nalines     = split(lines, aline, /\n/)
+	slines      = ""
+	dlines      = ""
+	ndlines     = 0
+	append      = 1
+	modified    = 0
+	replaced    = 0
+	commentout  = commentout ? commentout : 0
+}
+{
+	sline  = $0
+	if (sline !~ /^[[:space:]]*$/) {
+		if (commentout) {
+			commentouted = sline ~ /^[[:space:]]*#/ ? 1 : 0
+			sub(/^[[:space:]]*(#|[[:space:]])*[[:space:]]*/, "", sline)
+		} else {
+			sub(/^[[:space:]]*/, "", sline)
+			commentouted = 0
+		}
+		sub(/[[:space:]]*(#.*|[[:space:]]*)$/, "", sline)
+		if (sline ~ /^[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+$/) {
+			nsfields = split(sline, sfields, /[[:space:]]+/)
+			fs_spec = sfields[1]
+			for (naline in aline) {
+				line = aline[naline]
+				sub(/^[[:space:]]*/, "", line)
+				sub(/[[:space:]]*(#.*|[[:space:]]*)$/, "", line)
+				split(line, afields, /[[:space:]]+/)
+				afs_spec = afields[1]
+				if (fs_spec == afs_spec) {
+					dlines = dlines ? dlines" "naline : naline
+					for (i = 2; i <= nsfields; i++) {
+						if (sfields[i] != afields[i] || commentouted) {
+							sline = aline[naline]
+							modified = 1
+							replaced = 1
+							break
+						}
+					}
+					break
+				}
+			}
+			if (replaced) {
+				delete aline[naline]
+			} else {
+				sline = $0
+			}
+			replaced = 0
+		} else {
+			sline = $0
+		}
+	}
+	slines = slines ? slines"\n"sline : sline
+}
+END {
+	if (dlines) {
+		ndlines = split(dlines, dline, / /)
+	}
+	for (naline = 1; naline <= nalines; naline++) {
+		if (ndlines > 0) {
+			for (ndline in dline) {
+				if (naline == dline[ndline]) {
+					append = 0
+					break
+				}
+			}
+		}
+		if (append) {
+			slines = slines ? slines"\n"aline[naline] : aline[naline]
+			modified = 1
+		}
+		append = 1
+	}
+	print slines
+	exit ! modified
+}'
+
+_f_merge_makefile_awk='
+BEGIN {
+	sub(/[[:space:]]*$/, "", lines)
+	sub(/^[[:space:]]*/, "", lines)
+	line        = ""
+	nalines     = split(lines, aline, /\n/)
+	dlines      = ""
+	ndlines     = 0
+	clines      = ""
+	cslines     = ""
+	continuous  = 0
+	slines      = ""
+	append      = 1
+	modified    = 0
+	replaced    = 0
+	commentout  = commentout ? commentout : 0
+}
+{
+	sline = $0
+	if (sline !~ /^[[:space:]]*$/) {
+		if (commentout) {
+			commentouted = sline ~ /^[[:space:]]*#/ ? 1 : 0
+			sub(/^[[:space:]]*#/, "", sline)
+		} else {
+			commentouted = 0
+		}
+		if (sline !~ /^[[:space:]]*#.*$/) {
+			if (sline !~ /\\[[:space:]]*$/) {
+				if (continuous) {
+					cslines = cslines ? cslines"\n"$0 : $0
+					clines = clines ? clines"\n"sline : sline
+					line = ""
+					for (i = 1; i <= split(clines, cline, /\n/); i++) {
+						sub(/^\t*/, "", cline[i])
+						sub(/\\[[:space:]]*$/, "", cline[i])
+						line = line ? line""cline[i] : cline[i]
+					}
+					sline = cslines
+					cslines = ""
+					clines = ""
+					continuous = 0
+				} else {
+					line = sline
+					sline = $0
+				}
+			} else {
+				cslines = cslines ? cslines"\n"$0 : $0
+				clines = clines ? clines"\n"sline : sline
+				continuous = 1
+				next
+			}
+			svar = line
+			sub(/[[:space:]]*[\!|\?|\+|:]?=.*$/, "", svar)
+			sub(/^[[:space:]]*/, "", svar)
+			svalue = line
+			sub(/^[^[:space:]]+[[:space:]]*[\!|\?|\+|:]?=[[:space:]]*/, "", svalue)
+			sub(/([[:space:]]*#.*|[[:space:]]*)$/, "", svalue)
+			sop  = line
+			sub("^[[:space:]]*" svar "[[:space:]]*", "", sop)
+			sub("[[:space:]]*" svalue ".*$", "", sop)
+			for (naline in aline) {
+				if (aline[naline] ~ /^([[:space:]]*#.*|[[:space:]]*)$/) {
+					continue
+				}
+				avar = aline[naline]
+				sub(/[[:space:]]*[\!|\?|\+|:]?=.*$/, "", avar)
+				sub(/^[[:space:]]*/, "", avar)
+				avalue = aline[naline]
+				sub(/^[^[:space:]]+[[:space:]]*[\!|\?|\+|:]?=[[:space:]]*/, "", avalue)
+				sub(/([[:space:]]*#.*|[[:space:]]*)$/, "", avalue)
+				aop  = aline[naline]
+				sub("^[[:space:]]*" avar "[[:space:]]*", "", aop)
+				sub("[[:space:]]*" avalue ".*$", "", aop)
+				if (svar == avar) {
+					dlines = dlines ? dlines" "naline : naline
+					if (svalue != avalue || sop != aop || commentouted) {
+						sline = aline[naline]
+						modified = 1
+						replaced = 1
+						break
+					}
+				}
+			}
+			if (replaced) {
+				delete aline[naline]
+			}
+			replaced = 0
+		} else {
+			sline = $0
+		}
+	}
+	slines = slines ? slines"\n"sline : sline
+}
+END {
+	if (dlines) {
+		ndlines = split(dlines, dline, / /)
+	}
+	for (naline = 1; naline <= nalines; naline++) {
+		if (ndlines > 0) {
+			for (ndline in dline) {
+				if (naline == dline[ndline]) {
+					append = 0
+					break
+				}
+			}
+		}
+		if (append) {
+			slines = slines ? slines"\n"aline[naline] : aline[naline]
+			modified = 1
+		}
+		append = 1
+	}
+	print slines
+	exit ! modified
+}'
+
+_f_merge_passwd_awk='
+BEGIN {
+	sub(/[[:space:]]*$/, "", lines)
+	sub(/^[[:space:]]*/, "", lines)
+	nalines     = split(lines, aline, /\n/)
+	slines      = ""
+	dlines      = ""
+	ndlines     = 0
+	append      = 1
+	modified    = 0
+	replaced    = 0
+	commentout  = commentout ? commentout : 0
+}
+{
+	sline  = $0
+	if (sline !~ /^[[:space:]]*$/) {
+		if (commentout) {
+			commentouted = sline ~ /^[[:space:]]*#/ ? 1 : 0
+			sub(/^[[:space:]]*(#|[[:space:]])*[[:space:]]*/, "", sline)
+		} else {
+			sub(/^[[:space:]]*/, "", sline)
+			commentouted = 0
+		}
+		sub(/[[:space:]]*(#.*|[[:space:]]*)$/, "", sline)
+		if (sline ~ /^[^:]+:([^:]*:)*[^:]*:?$/) {
+			nfields = split(sline, fields, /:/)
+			name = fields[1]
+			for (naline in aline) {
+				line = aline[naline]
+				sub(/^[[:space:]]*/, "", line)
+				sub(/[[:space:]]*(#.*|[[:space:]]*)$/, "", line)
+				nafields = split(line, afields, /:/)
+				aname = afields[1]
+				if (name == aname) {
+					dlines = dlines ? dlines" "naline : naline
+					for (i = 2; i <= nfields; i++) {
+						if (fields[i] != afields[i] || commentouted) {
+							sline = aline[naline]
+							modified = 1
+							replaced = 1
+							break
+						}
+					}
+					break
+				}
+			}
+			if (replaced) {
+				delete aline[naline]
+			} else {
+				sline = $0
+			}
+			replaced = 0
+		} else {
+			sline = $0
+		}
+	}
+	slines = slines ? slines"\n"sline : sline
+}
+END {
+	if (dlines) {
+		ndlines = split(dlines, dline, / /)
+	}
+	for (naline = 1; naline <= nalines; naline++) {
+		if (ndlines > 0) {
+			for (ndline in dline) {
+				if (naline == dline[ndline]) {
+					append = 0
+					break
+				}
+			}
+		}
+		if (append) {
+			slines = slines ? slines"\n"aline[naline] : aline[naline]
+			modified = 1
+		}
+		append = 1
+	}
+	print slines
+	exit ! modified
+}'
+
+_f_merge_sh_awk='
+BEGIN {
+	sub(/[[:space:]]*$/, "", lines)
+	sub(/^[[:space:]]*/, "", lines)
+	nalines     = split(lines, aline, /\n/)
+	dlines      = ""
+	ndlines     = 0
+	clines      = ""
+	cslines     = ""
+	continuous  = 0
+	slines      = ""
+	append      = 1
+	modified    = 0
+	replaced    = 0
+	commentout  = commentout ? commentout : 0
+}
+{
+	sline = $0
+	if (sline !~ /^[[:space:]]*$/) {
+		if (commentout) {
+			commentouted = sline ~ /^[[:space:]]*#/ ? 1 : 0
+			sub(/^[[:space:]]*#/, "", sline)
+		} else {
+			commentouted = 0
+		}
+		if (sline !~ /^[[:space:]]*#.*$/) {
+			if (sline !~ /\\[[:space:]]*$/) {
+				if (continuous) {
+					cslines = cslines ? cslines"\n"$0 : $0
+					clines = clines ? clines"\n"sline : sline
+					line = ""
+					for (i = 1; i <= split(clines, cline, /\n/); i++) {
+						sub(/^\t*/, "", cline[i])
+						sub(/\\[[:space:]]*$/, "", cline[i])
+						line = line ? line""cline[i] : cline[i]
+					}
+					sline = cslines
+					cslines = ""
+					clines = ""
+					continuous = 0
+				} else {
+					line = sline
+					sline = $0
+				}
+			} else {
+				cslines = cslines ? cslines"\n"$0 : $0
+				clines = clines ? clines"\n"sline : sline
+				continuous = 1
+				next
+			}
+			svar = line
+			sub(/=.*$/, "", svar)
+			sub(/^[[:space:]]*/, "", svar)
+			svalue = line
+			sub(/^.*=/, "", svalue)
+			sub(/([[:space:]]*#.*|[[:space:]]*)$/, "", svalue)
+			for (naline in aline) {
+				if (aline[naline] ~ /^([[:space:]]*#.*|[[:space:]]*)$/) {
+					continue
+				}
+				avar = aline[naline]
+				sub(/=.*$/, "", avar)
+				sub(/^[[:space:]]*/, "", avar)
+				avalue = aline[naline]
+				sub(/^.*=/, "", avalue)
+				sub(/([[:space:]]*#.*|[[:space:]]*)$/, "", avalue)
+				if (svar == avar) {
+					dlines = dlines ? dlines" "naline : naline
+					if (svalue != avalue || commentouted) {
+						sline = aline[naline]
+						modified = 1
+						replaced = 1
+						break
+					}
+				}
+			}
+			if (replaced) {
+				delete aline[naline]
+			}
+			replaced = 0
+		} else {
+			sline = $0
+		}
+	}
+	slines = slines ? slines"\n"sline : sline
+}
+END {
+	if (dlines) {
+		ndlines = split(dlines, dline, / /)
+	}
+	for (naline = 1; naline <= nalines; naline++) {
+		if (ndlines > 0) {
+			for (ndline in dline) {
+				if (naline == dline[ndline]) {
+					append = 0
+					break
+				}
+			}
+		}
+		if (append) {
+			slines = slines ? slines"\n"aline[naline] : aline[naline]
+			modified = 1
+		}
+		append = 1
+	}
+	print slines
+	exit ! modified
+}'
+
+_f_merge_sshd_config_awk='
+BEGIN {
+	sub(/[[:space:]]*$/, "", lines)
+	sub(/^[[:space:]]*/, "", lines)
+	nalines     = split(lines, aline, /\n/)
+	slines      = ""
+	dlines      = ""
+	ndlines     = 0
+	append      = 1
+	modified    = 0
+	replaced    = 0
+	commentout  = commentout ? commentout : 0
+}
+{
+	sline = $0
+	if (sline !~ /^[[:space:]]*$/) {
+		if (commentout) {
+			commentouted = sline ~ /^[[:space:]]*#/ ? 1 : 0
+			sub(/^[[:space:]]*(#|[[:space:]])*[[:space:]]*/, "", sline)
+		} else {
+			sub(/^[[:space:]]*/, "", sline)
+			commentouted = 0
+		}
+		sub(/[[:space:]]*(#.*|[[:space:]]*)$/, "", sline)
+		if (sline ~ /^[^[:space:]]+[[:space:]]+[^[:space:]]+$/) {
+			split(sline, fields, /[[:space:]]+/)
+			svar    = fields[1]
+			svalue  = fields[2]
+			for (naline in aline) {
+				line = aline[naline]
+				sub(/^[[:space:]]*/, "", line)
+				sub(/[[:space:]]*(#.*|[[:space:]]*)$/, "", line)
+				split(line, fields, /[[:space:]]+/)
+				avar   = fields[1]
+				avalue = fields[2]
+				if (svar == avar) {
+					dlines = dlines ? dlines" "naline : naline
+					if (svalue != avalue || commentouted) {
+						sline = aline[naline]
+						modified = 1
+						replaced = 1
+						break
+					}
+				}
+			}
+			if (replaced) {
+				delete aline[naline]
+			} else {
+				sline = $0
+			}
+			replaced = 0
+		} else {
+			sline = $0
+		}
+	}
+	slines = slines ? slines"\n"sline : sline
+}
+END {
+	if (dlines) {
+		ndlines = split(dlines, dline, / /)
+	}
+	for (naline = 1; naline <= nalines; naline++) {
+		if (ndlines > 0) {
+			for (ndline in dline) {
+				if (naline == dline[ndline]) {
+					append = 0
+					break
+				}
+			}
+		}
+		if (append) {
+			slines = slines ? slines"\n"aline[naline] : aline[naline]
+			modified = 1
+		}
+		append = 1
+	}
+	print slines
+	exit ! modified
+}'
+
+
+get-makevar()
+{
+	awk -v var="$2" "$_f_get_makevar_awk" $1
+}
+
+get-mergedfiletype()
+{
+	local	__function__=get-mergedfiletype			\
+		__merged_file=$1				\
+		__merged_filename				\
+		__type
+
+	if echo $__merged_file | egrep -q -e '/etc/[^.\/]+\.conf\.d/'; then
+		__merged_filename=$(echo $__merged_file | sed -Ee 's,^.*/etc/([^./]+\.conf)\.d/.+$,\1,')
+	elif echo $__merged_file | egrep -q -e '/etc/rc\.d/'; then
+		__merged_filename='rc.d'
+	else
+		__merged_filename=$(basename $__merged_file)
+	fi
+	case $__merged_filename in
+	config|fstab|hosts|newsyslog.conf|sshd_config|syslog.conf|ttys|xorg.conf|pkgtools.conf)
+		__type=$(echo $__merged_filename | sed -Ee 's/\./_/g')
+		;;
+	Emacs)
+		__type="xrd"
+		;;
+	FreeBSD.conf)
+		__type="freebsd_conf"
+		;;
+	Xsession|loader.conf|rc.conf|rc.d|sysctl.conf)
+		__type="sh"
+		;;
+	make.conf|*.mk)
+		__type="makefile"
+		;;
+	master.passwd|group)
+		__type="passwd"
+		;;
+	*)
+		error "specified file '$_merged_file' can not recognized"
+		;;
+	esac
+	echo $__type
+}
+
+merge()
+{
+	local	__args=""					\
+		__function__=merge				\
+		__merge_from_file=false				\
+		__merge_lines					\
+		__merge_to_org=false				\
+		__merged_file					\
+		__names=""					\
+		__only_proc_specified_names=false		\
+		__type
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			shift
+			__only_proc_specified_names=true
+			__names="$1"
+			;;
+		-f)
+			shift
+			__merge_from_file=true
+			__merge_file=$1
+			;;
+		-o)
+			__merge_to_org=true
+			;;
+		-*)
+			__args="$__args${__args:+ }$1"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__merged_file=$1
+	if $__merge_from_file; then
+		__merge_lines=$(cat $__merge_file)
+	else
+		__merge_lines=$(eval echo \"'${'$2'}'\")
+	fi
+	if $__only_proc_specified_names; then
+		__names=$(echo "$__names" | sed -Ee 's/[[:space:]]+/|/g' -e 's/^.*$/(&)/' -e 's/^/\^\[\[:space:\]\]\*/')
+		__merge_lines=$(echo "$__merge_lines" | egrep "$__names")
+	fi
+	__type=$(get-mergedfiletype $__merged_file)
+	$__merge_to_org && cpf $__merged_file.org $__merged_file
+	runc merge-$__type $__args $__merged_file __merge_lines
+}
+
+merge-config()
+{
+	local __n __merged_lines __merge_line \
+		__merge_key __merge_value __merged=false
+
+	__merged_lines="$(cat $_merged_file)"
+	__n=$(echo "$_merge_lines" | wc -l)
+	while [ $__n -ge 1 ] ; do
+		__merge_line="$(pop _merge_lines | \
+	        	sed -Ee 's/#.*$//' -e 's/[[:space:]]*$//')"
+		_merge_lines="$(poped _merge_lines)"
+		if [ -n "$__merge_line" ]; then
+			IFS='='; set  -- $__merge_line; unset IFS
+			__merge_key=$(escape_char $1); __merge_value=$(escape_char $2);
+			putdebug 1 0 __merge_key __merge_value
+			if ! echo "$__merged_lines" | \
+					egrep -q -e "^$__merge_key[[:space:]]*=[[:space:]]*$__merge_value$"; then
+				if echo "$__merged_lines" | \
+						egrep -q -e "^$__merge_key[[:space:]]*="; then
+					__merged_lines=$(echo "$__merged_lines" | \
+							sed -Ee "s|^$__merge_key[[:space:]]*=.*$|$__merge_line|g")
+				else
+					__merged_lines=$(printf "%s\n%s\n" "$__merged_lines" "$__merge_line")
+				fi
+				__merged=true
+			fi
+		fi
+		__n=$(($__n - 1))
+	done
+	if $__merged; then
+		if $_debug; then
+			echo 'echo '\""$__merged_lines"\"' > '$_merged_file
+		else
+			putdebug 1 0 _merged_file
+			backup $_merged_file
+			echo "$__merged_lines" > $_merged_file
+		fi
+	fi
+}
+
+merge-freebsd_conf()
+{
+	local	__awk_arg=""					\
+		__function__=merge-freebsd_conf			\
+		__merged_file					\
+		__merge_lines
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__awk_arg="$__awk_arg${__awk_arg:+ }-v commentout=1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__merged_file=$1
+	__merge_lines=$(eval echo \"'${'$2'}'\")
+	__merge_lines=$(echo "$__merge_lines" | awk "$_f_lines_to_newlined_string_awk")
+	putdebug 1 0 __merge_lines
+	mktmpfile
+#	awk $__awk_arg -v lines="$__merge_lines" "$_f_merge_freebsd_conf_awk" $__merged_file
+	if awk $__awk_arg -v lines="$__merge_lines" "$_f_merge_freebsd_conf_awk" $__merged_file > $_mktmpfiles; then
+		copy $_mktmpfiles $__merged_file
+	fi
+	rmtmpfile
+}
+
+merge-fstab()
+{
+	local	__awk_arg=""					\
+		__function__=merge-fstab			\
+		__merged_file					\
+		__merge_lines
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__awk_arg="$__awk_arg${__awk_arg:+ }-v commentout=1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__merged_file=$1
+	__merge_lines=$(eval echo \"'${'$2'}'\")
+	putdebug 1 1 __merged_file __merge_lines
+	__merge_lines=$(echo "$__merge_lines" | awk "$_f_lines_to_newlined_string_awk")
+	putdebug 1 2 __merge_lines
+	putdebug 1 3 __awk_arg
+	mktmpfile
+	if awk $__awk_arg -v lines="$__merge_lines" "$_f_merge_fstab_awk" $__merged_file > $_mktmpfiles; then
+		putdebug 1 4 __merged_file
+		runc copy $_mktmpfiles $__merged_file
+	fi
+	rmtmpfile
+}
+
+merge-hosts()
+{
+	local __n __merged_file=$1 __merge_file=$2 __merge_lines __merged_lines __merge_line \
+		__merge_device __merge_mountpoint __merge_fstype __merge_options \
+		__merge_dump __merge_pass \
+		__merged=false
+
+	__merge_lines="$(cat $__merge_file)"
+	__merged_lines="$(cat $__merged_file)"
+	__n=$(echo "$__merge_lines" | wc -l)
+	while [ $__n -ge 1 ] ; do
+		__merge_line=$(pop __merge_lines | \
+					sed -Ee 's/#.*$//' -e 's/[[:space:]]*$//')
+		__merge_lines="$(poped __merge_lines)"
+		if [ -n "$__merge_line" ]; then
+			set -- $__merge_line
+			__merge_ip=$1; shift; __merge_domains="$*";
+			__merged_domains=$(echo "$__merged_lines" | \
+							sed -Ee "s/^$__merge_ip[[:space:]]+([^[:space:]]+.*)$/\1/")
+			if ! (test "$__merged_domains" && \
+					equiv_set "$__merged_domains" "$__merge_domains"); then
+				if echo "$__merged_lines" | \
+						egrep -q -e "^$__merge_ip[[:space:]]+"; then
+					__merged_lines=$(echo "$__merged_lines"|\
+									sed -Ee "s/^$__merge_ip[[:space:]]+.*$/$__merge_line/g")
+				else
+					__merged_lines=$(printf "%s\n%s\n" "$__merged_lines" "$__merge_line")
+				fi
+				__merged=true
+			fi
+		fi
+		__n=$(($__n - 1))
+	done
+	if $__merged; then
+		if $_debug; then
+			echo 'echo '\""$__merged_lines"\"' > '$__merged_file
+		else
+			backup $__merged_file
+			echo "$__merged_lines" > $__merged_file
+		fi
+	fi
+}
+
+merge-makefile()
+{
+	local	__awk_arg=""					\
+		__function__=merge-makefile			\
+		__merged_file					\
+		__merge_lines
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__awk_arg="$__awk_arg${__awk_arg:+ }-v commentout=1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__merged_file=$1
+	__merge_lines=$(eval echo \"'${'$2'}'\")
+	__merge_lines=$(echo "$__merge_lines" | awk "$_f_lines_to_newlined_string_awk")
+	putdebug 1 0 __merge_lines
+	mktmpfile
+	if awk $__awk_arg -v lines="$__merge_lines" "$_f_merge_makefile_awk" $__merged_file > $_mktmpfiles; then
+		copy $_mktmpfiles $__merged_file
+	fi
+	rmtmpfile
+}
+
+merge-newsyslog_conf()
+{
+	local __n __merged_lines __merge_line \
+		__merge_varname __merge_value1 __merge_value2 __merge_value3 \
+		__merge_value4 __merge_value5	 __merged=false
+
+	if [ ! -f $_merged_file ]; then
+		mkdir -p $(dirname $_merged_file)
+		echo "# logfilename          [owner:group]    mode count size when  flags [/pid_file] [sig_num]" > $_merged_file
+	fi
+	__merged_lines="$(cat $_merged_file)"
+	_merge_lines=$(echo "$_merge_lines" | \
+				sed -Ee 's/#.*$//' -e 's/[[:space:]]*$//')
+	putdebug -v 1 merge-newsyslog_conf _merge_lines
+	putdebug -v 1 merge-newsyslog_conf __merged_lines
+	if [ -n "$_merge_lines" ]; then
+		set -- $_merge_lines
+		__merge_varname=$1
+		__merge_value1=$2
+		__merge_value2=$3
+		__merge_value3="$(escape_char $4)"
+		__merge_value4="$(escape_char $5)"
+		__merge_value5="$(escape_char $6)"
+		if ! echo "$merged_lines" | \
+				egrep -q -e "^$__merge_varname[[:space:]]+$__merge_value1[[:space:]]+$__merge_value2[[:space:]]+$__merge_value3[[:space:]]+$__merge_value4[[:space:]]+$__merge_value5"; then
+			if echo "$__merged_lines" | \
+					egrep -q -e "^$__merge_varname[[:space:]]+"; then
+				__merged_lines=$(echo "$__merged_lines"|\
+								sed -Ee "s|^$__merge_varname[[:space:]]+.*$|$_merge_lines|g")
+			else
+				__merged_lines=$(printf "%s\n%s\n" "$__merged_lines" "$_merge_lines")
+			fi
+			__merged=true
+		fi
+	fi
+	if $__merged; then
+		if $_debug; then
+			echo 'echo '\""$__merged_lines"\"' > '$_merged_file
+		else
+			backup $_merged_file
+			echo "$__merged_lines" > $_merged_file
+		fi
+	fi
+}
+
+merge-passwd()
+{
+	local	__awk_arg=""					\
+		__function__=merge-passwd			\
+		__merge_lines					\
+		__merged_dir					\
+		__merged_file					\
+		__merged_filename
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__awk_arg="$__awk_arg${__awk_arg:+ }-v commentout=1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__merged_file=$1
+	__merge_lines=$(eval echo \"'${'$2'}'\")
+	__merge_lines=$(echo "$__merge_lines" | awk "$_f_lines_to_newlined_string_awk")
+	mktmpfile
+	putdebug 1 0 __awk_arg __merge_lines __merged_file
+	if awk $__awk_arg -v lines="$__merge_lines" "$_f_merge_passwd_awk" $__merged_file > $_mktmpfiles; then
+		copy $_mktmpfiles $__merged_file
+		__merged_filename=$(basename $__merged_file)
+		case $__merged_filename in
+		master.passwd)
+			__merged_dir=$(dirname $__merged_file)
+			runc pwd_mkdb -d $__merged_dir $__merged_file
+			;;
+		esac
+	fi
+	rmtmpfile
+}
+
+merge-pkgtools_conf()
+{
+	local __port=$1 __args="$2" __already_exist=false \
+		__make_args_key="\'$__port\'" __key __value __make_args_value __start_key \
+		__merged_lines _merge_lines __merge_lines_new __merged_value __merged=false	  
+
+	__merged_lines="$(cat $_merged_file)"
+	if echo "$__merged_lines" | egrep -q -e "$__make_args_key[[:space:]]*=>"; then
+		__merge_lines="$(echo \"$__merged_lines\" | \
+						sed -nEe \"/^[[:space:]]*$__make_args_key[[:space:]]*=>[[:space:]]*\[[[:space:]]*$/,/^[[:space:]]*\],[[:space:]]*$/p\")"
+		__merge_lines="$(printf \"\n%s\n\" $__merge_lines)"
+		__already_exist=true
+	fi
+	IFS=','; set -- $__args; unset IFS
+	while [ $# -ge 1 ] ; do
+		case $1 in
+		*=*)
+			__key=${1%%=*}
+			__value=${1##*=}
+			__make_args_value="$(quote $1)"
+			;;
+		*)
+			__key=$1
+			__value=1
+			__make_args_value="\'$1=1\'"
+			;;
+		esac
+		if [ -n "$__merge_lines" ]; then
+			if echo "$__merge_lines" | egrep -q -e "[\'\"]$__key="; then
+					__merged_value=$(echo "$__merge_lines" | \
+					sed -Ee "s,^[[:space:]]*[\'\"]$__key=(.*)[\'\"]$,\1,")
+				if [ "$__merged_value" != "$__value" ]; then
+					__merge_lines=$(echo "$__merge_lines" | \
+									sed -Ee "s,^([[:space:]]*[\'\"]$__key=).*([\'\"])$,\1$__value\2,")
+					__merged=true
+				fi
+			else
+				__start_key="$(echo \"$__merge_lines\" | \
+							egrep -e \"^[[:space:]]*$__make_args_key[[:space:]]*=>[[:space:]]*\[[[:space:]]*$\")"
+				__merge_lines_new="$(printf \"%s\n	   %s,\n\" $__start_key $__make_args_value)"
+				splice -i __merge_lines __merge_lines_new
+				__merged=true
+			fi
+		else
+			__merge_lines="$(printf \"\n	   %s => [\n	  %s\n	  ],\n\" \
+							$__make_args_key $__make_args_value)"
+			__merged=true
+		fi
+		shift
+	done
+	if $__merged; then
+		if $__already_exist; then
+			splice -r __merged_lines __merge_lines
+		else
+			__start_key=$(echo "$__merged_lines" | \
+						egrep -e "^([[:space:]]*MAKE_ARGS[[:space:]]*=[[:space:]]*{[[:space:]]*)$")
+			__merge_lines="$(printf \"%s\n%s\n\" $__start_key $__merge_lines)"
+			splice -i __merged_lines __merge_lines
+		fi
+		if $_debug_level; then
+			echo "$__merged_lines" '>' $_merged_file
+		else
+			backup $_merged_file
+			echo "$__merged_lines" > $_merged_file
+		fi
+	fi
+}
+
+merge-sh()
+{
+	local	__awk_arg=""					\
+		__function__=merge-sh				\
+		__merged_file					\
+		__merge_lines
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__awk_arg="$__awk_arg${__awk_arg:+ }-v commentout=1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__merged_file=$1
+	__merge_lines=$(eval echo \"'${'$2'}'\")
+	__merge_lines=$(echo "$__merge_lines" | awk "$_f_lines_to_newlined_string_awk")
+	putdebug 1 0 __merge_lines
+	mktmpfile
+	if awk $__awk_arg -v lines="$__merge_lines" "$_f_merge_sh_awk" $__merged_file > $_mktmpfiles; then
+		copy $_mktmpfiles $__merged_file
+	fi
+	rmtmpfile
+}
+
+merge-sshd_config()
+{
+	local	__awk_arg=""					\
+		__function__=merge-sshd_config			\
+		__merged_file					\
+		__merge_lines
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-c)
+			__awk_arg="$__awk_arg${__awk_arg:+ }-v commentout=1"
+			;;
+		-*)
+			error merge-sshd_config "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__merged_file=$1
+	__merge_lines=$(eval echo \"'${'$2'}'\")
+	__merge_lines=$(echo "$__merge_lines" | awk "$_f_lines_to_newlined_string_awk")
+	mktmpfile
+	if awk $__awk_arg -v lines="$__merge_lines" "$_f_merge_sshd_config_awk" $__merged_file > $_mktmpfiles; then
+		copy $_mktmpfiles $__merged_file
+	fi
+	rmtmpfile
+}
+
+merge-syslog_conf()
+{
+	local __n __merged_lines __merge_line \
+		__merge_varname __merge_value __merged=false
+
+	__merged_lines="$(cat $_merged_file)"
+	putdebug -v 1 merge-syslog_conf _merge_lines
+	putdebug -v 1 merge-syslog_conf __merged_lines
+	__n=$(echo "$_merge_lines" | wc -l)
+	while [ $__n -ge 1 ] ; do
+		__merge_line=$(pop _merge_lines | sed -Ee 's/#.*$//' -e 's/[[:space:]]*$//')
+		__merge_lines="$(poped _merge_lines)"
+		if [ -n "$__merge_line" ]; then
+			set -- $__merge_line
+			__merge_varname=$1
+			__merge_value=$2
+			if ! echo "$__merged_lines" | \
+					egrep -q -e "^$__merge_varname[[:space:]]+$__merge_value"; then
+				if echo "$__merged_lines" | \
+						egrep -q -e "^$__merge_varname[[:space:]]+"; then
+					__merged_lines=$(echo "$__merged_lines"|\
+									sed -Ee "s|^$__merge_varname[[:space:]]+.*$|$__merge_line|g")
+				else
+					__merged_lines=$(printf "%s\n%s\n" "$__merged_lines" "$__merge_line")
+				fi
+				__merged=true
+			fi
+		fi
+		: $((__n -= 1))
+	done
+	if $__merged; then
+		if $_debug; then
+			echo "$__merged_lines" '>' $_merged_file
+		else
+			backup $_merged_file
+			echo "$__merged_lines" > $_merged_file
+		fi
+	fi
+}
+
+merge-ttys()
+{
+	local __n __merged_lines __merge_line \
+		__merge_name __merge_getty __merge_type __merge_switch __merge_state  \
+		__merged=false
+
+	__merged_lines="$(cat $_merged_file)"
+	__n=$(echo "$_merge_lines" | wc -l)
+	while [ $__n -ge 1 ] ; do
+		__merge_line="$(pop _merge_lines | \
+					sed -Ee 's/#.*$//' -e 's/[[:space:]]*$//')"
+		_merge_lines="$(poped _merge_lines)"
+		if [ -n "$__merge_line" ]; then
+			set	 -- $__merge_line
+			eval set "$@"
+			__merge_name=$(quotize "$1"); __merge_getty=$(quotize "$2");
+			__merge_type=$(quotize "$3"); __merge_switch=$(quotize "$4");
+			__merge_state=$(quotize "$5")
+			if ! echo "$__merged_lines" | \
+					egrep -q -e "^$__merge_name[[:space:]]+$__merge_getty[[:space:]]+$__merge_type[[:space:]]+$__merge_switch[[:space:]]+$__merge_state$"; then
+				if echo "$__merged_lines" | \
+						egrep -q -e "^$__merge_name[[:space:]]+"; then
+					__merged_lines=$(echo "$__merged_lines" | \
+									sed -Ee "s|^$__merge_name[[:space:]]+.*$|$__merge_line|g")
+				else
+					__merged_lines=$(printf "%s\n%s\n" "$__merged_lines" "$__merge_line")
+				fi
+				__merged=true
+			fi
+		fi
+		__n=$(($__n - 1))
+	done
+	if $__merged; then
+		if $_debug; then
+			echo 'echo '\""$__merged_lines"\"' > '$_merged_file
+		else
+			putdebug 1 0 _merged_file
+			backup $_merged_file
+			echo "$__merged_lines" > $_merged_file
+		fi
+	fi
+}
+
+merge-xorg_conf-section()
+{
+	local __n __recursive=false __rkey_start __rkey_end __rkey_ident \
+		__key_start __key_end __key_ident \
+		__section_name __ioption __section_merge __section_start_line __section_end_line \
+		__section_lines __section_line __key __value __section_merged=false \
+		__merged_lines __setion
+
+	case $1 in
+	-r)
+		shift
+		__recursive=true
+		__rkey_start=$1; shift; __rkey_end=$1; shift; __rkey_ident=$1; shift;
+		;;
+	esac
+	__key_start=$1; __key_end=$2; __key_ident=$3;
+	set -- $(echo "$_section" | egrep -w -e "^$__key_start")
+	__section_name=$2
+	if echo "$_section" | egrep -q -w -e "$__key_ident"; then
+		__ioption="-k $__key_ident"
+	else
+		__ioption=''
+	fi
+	if bgrep -q $__ioption _merged_lines _section; then
+		__section_merge=$(bgrep $__ioption _merged_lines _section)
+		__section_start_line=$(echo "$__section_merge" | head -1)
+		__section_end_line=$(echo "$__section_merge" | tail -1)
+		__section_merge=$(echo "$__section_merge" | sed -Ee '1d' -e '$d')
+		__section_lines=$(echo "$_section" | \
+						egrep -vwe "$__key_ident" | sed -Ee '1d' -e '$d')
+		if $__recursive && echo "$__section_lines" | egrep -qwe "$__rkey_start"; then
+			__merged_lines="$_merged_lines"
+			_merged_lines="$__section_merge"
+			__setion="$_setion"
+			_section=$(popb __section_lines $__rkey_start $__rkey_end)
+			putdebug -v 1 merge-xorg_conf-section _merged_lines _section
+			until [ -z "$_section" ]; do
+				merge-xorg_conf-section $__rkey_start $__rkey_end $__rkey_ident
+				__section_lines=$(popbed __section_lines $__rkey_start $__rkey_end)
+				_section=$(popb __section_lines $__rkey_start $__rkey_end)
+			done
+			__section_merge="$_merged_lines"
+			_merged_lines="$__merged_lines"
+			_setion="$__setion"
+		fi
+		putdebug -v 1 merge-xorg_conf-section __section_lines
+		__n=$(echo "$__section_lines" | wc -l)
+		while [ $__n -ge 1 ]; do
+			__section_line=$(pop __section_lines)
+			set -- $__section_line
+			__key=$1; shift; __value="$*"
+			putdebug -v 1 merge-xorg_conf-section __section_merge
+			putdebug 1 merge-xorg_conf-section __key __value
+			if ! echo "$__section_merge" | \
+					egrep -q -e "^[[:space:]]*$__key[[:space:]]+$__value$"; then
+				__section_merge=$(printf "%s\n%s\n" "$__section_merge" "$__section_line")
+				__section_merged=true
+				_merged=true
+				putdebug 1 merge-xorg_conf-section __section_merge __section_merged
+			fi	
+			__section_lines=$(poped __section_lines)
+			__n=$((__n - 1))
+		done
+		if $__section_merged; then
+			__section_merge=$(printf "%s\n%s\n%s\n" "$__section_start_line" \
+							"$__section_merge" "$__section_end_line")
+			putdebug -v 1 merge-xorg_conf-section __section_merge _merged_lines
+			_merged_lines=$(splice $__ioption -r _merged_lines __section_merge)
+			putdebug -v 1 merge-xorg_conf-section _merged_lines
+			__section_merged=false
+		fi
+	else
+		warn merge-xorg_conf-section "'$__section_name' section not found"
+	fi
+}
+
+merge-xorg_conf()
+{
+	local _merged_lines _section _merged=false
+
+	_merged_lines=$(cat $_merged_file)
+	_section=$(popb _merge_lines Section EndSection)
+	until [ -z "$_section" ]; do
+		merge-xorg_conf-section -r SubSection EndSubSection Depth Section EndSection Identifier
+		_merge_lines=$(popbed _merge_lines Section EndSection)
+		_section=$(popb _merge_lines Section EndSection)
+	done
+	if $_merged; then
+		backup $_merged_file
+		echo "$_merged_lines" > $_merged_file
+	fi
+}
+
+merge-xrd()
+{
+	local __n __merged_lines __merge_line \
+		__merge_resourcename __merge_value __merged=false
+
+	__merged_lines="$(cat $_merged_file)"
+	__n=$(echo "$_merge_lines" | wc -l)
+	while [ $__n -ge 1 ] ; do
+		__merge_line="$(pop _merge_lines | \
+	        	sed -Ee 's/!.*$//' -e 's/[[:space:]]*$//')"
+		_merge_lines="$(poped _merge_lines)"
+		if [ -n "$__merge_line" ]; then
+			IFS=':'; set  -- $__merge_line; unset IFS
+			__merge_resourcename=$(escape_char $1); __merge_value=$(escape_char $2);
+			putdebug 1 0 __merge_resourcename __merge_value
+			if ! echo "$__merged_lines" | \
+					egrep -q -e "^[[:space:]]*$__merge_resourcename[[:space:]]*:[[:space:]]*$__merge_value$"; then
+				if echo "$__merged_lines" | \
+						egrep -q -e "^[[:space:]]*$__merge_resourcename[[:space:]]*:"; then
+					__merged_lines=$(echo "$__merged_lines" | \
+							sed -Ee "s|^[[:space:]]*$__merge_resourcename[[:space:]]*:.*$|$__merge_line|g")
+				else
+					__merged_lines=$(printf "%s\n%s\n" "$__merged_lines" "$__merge_line")
+				fi
+				__merged=true
+			fi
+		fi
+		__n=$(($__n - 1))
+	done
+	if $__merged; then
+		if $_debug; then
+			echo 'echo '\""$__merged_lines"\"' > '$_merged_file
+		else
+			putdebug 1 0 _merged_file
+			backup $_merged_file
+			echo "$__merged_lines" > $_merged_file
+		fi
+	fi
+}
+
+mergeio()
+{
+	local	__args=""					\
+		__function__=mergeio				\
+		__image_file					\
+		__merge_file					\
+		__merge_from_file=false				\
+		__merge_lines					\
+		__merge_to_org=false				\
+		__merge_varname					\
+		__merged_file					\
+		__names=""					\
+		__only_proc_specified_names=false		\
+		__type
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			shift
+			__only_proc_specified_names=true
+			__names="$1"
+			;;
+		-f)
+			shift
+			__merge_from_file=true
+			__merge_file=$1
+			;;
+		-o)
+			__merge_to_org=true
+			;;
+		-*)
+			__args="$__args${__args:+ }$1"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__image_file=${1%%:*}
+	__merged_file=${1#*:}
+	if $__merge_from_file; then
+		__merge_lines=$(cat $__merge_file)
+	else
+		__merge_lines=$(eval echo \"'${'$2'}'\")
+	fi
+	if $__only_proc_specified_names; then
+		__names=$(echo "$__names" | sed -Ee 's/[[:space:]]+/|/g' -e 's/^.*$/(&)/' -e 's/^/\^\[\[:space:\]\]\*/')
+		__merge_lines=$(echo "$__merge_lines" | egrep "$__names")
+	fi
+	__type=$(get-mergedfiletype $__merged_file)
+	if mount-image $__image_file; then
+		putdebug -v 1 0 __merge_lines
+		$__merge_to_org && cpf $_mntdir$__merged_file.org $_mntdir$__merged_file
+		runc merge-$__type $__args $_mntdir$__merged_file __merge_lines
+		umount-image $__image_file
+	fi
+}
+
+renewal-file()
+{
+	local	__edit_file=$1					\
+		__edit_lines					\
+		__edit_lines_name=$2				\
+		__function__=renewal-file
+
+	if [ -f $__edit_file ]; then
+		putdebug 1 0 __edit_file __edit_lines_name
+		if ! isinclude-lines $__edit_file $__edit_lines_name; then
+			putdebug -v 1 1 $__edit_lines_name
+			merge -c $__edit_file $__edit_lines_name
+		fi
+	else
+		__edit_lines=$(eval echo \"'${'$__edit_lines_name'}'\")
+		runc  echo "$__edit_lines" \> $__edit_file
+	fi
+}
+
+
+fi # [ -z "$_sysrc_loaded" ]
+
+_sysrc_loaded=:

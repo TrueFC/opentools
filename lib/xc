@@ -1,0 +1,326 @@
+#!/bin/sh
+#-*- mode:sh; tab-width: 8; -*-
+# ex:ts=8
+#
+# Copyright (c) 2016 Kazuhiko Kiriyama <kiri@OpenEdu.org>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
+if [ -z "$_xc_loaded" ]; then
+
+_xc_loaded="YES"
+
+
+_f_get_windowsize_awk='
+BEGIN {
+	found        = 0
+	found_width  = 0
+	found_height = 0
+}
+{
+	if (found_width && found_height) {
+		found = 1
+		exit
+	}
+	if (! found_width && $0 ~ /^[[:space:]]*Width:/) {
+		sub(/^[[:space:]]*Width:[[:space:]]*/, "")
+		sub(/[[:space:]]*$/, "")
+		width = $0
+		found_width = 1
+	}
+	if (! found_height && $0 ~ /^[[:space:]]*Height:/) {
+		sub(/^[[:space:]]*Height:[[:space:]]*/, "")
+		sub(/[[:space:]]*$/, "")
+		height = $0
+		found_height = 1
+	}
+}
+END {
+	print found ? width "x" height : ""
+	exit ! found
+}'
+
+check-env()
+{
+	local	__function__=check-env				\
+		__mode=none
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-w)
+			__mode=window
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	window)
+		if check-command xdpyinfo && xdpyinfo > /dev/null 2>&1; then
+			return 0
+		else
+			return 1
+		fi
+		;;
+	*)
+		error "environment mode '$__mode' not allowed"
+		;;
+	esac
+}
+
+get-windowdecoration()
+{
+	local	__application					\
+		__application_name				\
+		__function__=get-windowdecoration		\
+		__hostname=$(hostname)				\
+		__mode=none					\
+		__username=$(id -u -nr)
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			__mode=application_name
+			;;
+		-h)
+			shift
+			__hostname=$1
+			;;
+		-t)
+			__mode=title
+			;;
+		-u)
+			shift
+			__username=$1
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__application=$1
+	case $__mode in
+	application_name)
+		case $__application in
+		emacs|xemacs)
+			__application_name="XEmacs"
+			;;
+		slgn)
+			__application_name="$__hostname"
+			;;
+		w3m)
+			__application_name="W3M"
+			;;
+		xterm)
+			__application_name="XTerm$_window_position_abbrev"
+			;;
+		*)
+			__application_name=""
+			;;
+		esac
+		echo "$__application_name"
+		;;
+	title)
+		case $__application in
+		emacs|xemacs)
+			__title="XEmacs: $_window_position_name: $__username@$__hostname"
+			;;
+		slgn)
+			__title="slogin ($__username@$__hostname)"
+			;;
+		w3m)
+			__title="W3M: $__username@$__hostname"
+			;;
+		xterm)
+			__title="XTerm: $_window_position_name: $__username@$__hostname"
+			;;
+		*)
+			__title=""
+			;;
+		esac
+		echo "$__title"
+		;;
+	*)
+		error "invalid mode name '$__mode'"
+		;;
+	esac
+}
+
+get-windowgeometry()
+{
+	local	__function__=get-windowgeometry
+
+	__xprog=$1
+	__window_size=$(get-windowsize)
+	case $__xprog in
+	emacs|xemacs)
+		case $_window_position in
+		RightTop)
+			case $__window_size in
+			800x600)	__geometry='82x29+0+64'		;;
+			1024x600)	__geometry='106x29-50-1'	;;
+			1024x768)	__geometry='83x30+0+64'		;;
+			1280x800)	__geometry='86x33+0+64'		;;
+			1280x1024)	__geometry='86x40+0+132'	;;
+			1600x1200)	__geometry='126x64-64-0'	;;
+			*)
+				error "window size '$__window_size' not allowed"
+				;;
+			esac
+			;;
+		*)
+			error "window position '$_window_position' not allowed"
+			;;
+		esac
+		;;
+	firefox)
+		case $_window_position in
+		RightTop)
+			case $__window_size in
+			800x600)	__geometry='82x29+0+64'		;;
+			1024x600)	__geometry='942x569+16+0'	;;
+			1024x768)	__geometry='83x30+0+64'		;;
+			1280x800)	__geometry='86x33+0+64'		;;
+			1280x1024)	__geometry='86x40+0+132'	;;
+			1600x1200)	__geometry='1472x992+61-47'	;;
+			*)
+				error "window size '$__window_size' not allowed"
+				;;
+			esac
+			;;
+		*)
+			error "window position '$_window_position' not allowed"
+			;;
+		esac
+		;;
+	w3m)
+		case $_window_position in
+		LeftTop)
+			case $__window_size in
+			800x600)	__geometry='82x29+0+64'		;;
+			1024x600)	__geometry='91x29+57+42'	;;
+			1024x768)	__geometry='83x30+0+64'		;;
+			1280x800)	__geometry='86x33+0+64'		;;
+			1280x1024)	__geometry='86x40+0+132'	;;
+			1600x1200)	__geometry='118x51+260+83'	;;
+			*)
+				error "window size '$__window_size' not allowed"
+				;;
+			esac
+			;;
+		*)
+			error "window position '$_window_position' not allowed"
+			;;
+		esac
+		;;
+	xterm|slgn)
+		case $_window_position in
+		LeftTop)
+			case $__window_size in
+			800x600)	__geometry='82x29+0+64'		;;
+			1024x600)	__geometry='83x23+0+66'		;;
+			1024x768)	__geometry='83x30+0+64'		;;
+			1280x800)	__geometry='86x33+0+64'		;;
+			1280x1024)	__geometry='86x40+0+132'	;;
+			1600x1200)	__geometry='126x49+0+154'	;;
+			*)
+				error "window size '$__window_size' not allowed"
+				;;
+			esac
+			;;
+		LeftBottom)
+			case $__window_size in
+			1024x600)	__geometry='83x6+0+470'		;;
+			1024x768)	__geometry='83x7+0+612'		;;
+			1280x800)	__geometry='86x11+0-0'		;;
+			1280x1024)	__geometry='86x11+0-0'		;;
+			1600x1200)	__geometry='126x12+0-0'		;;
+			*)
+				error "window size '$__window_size' not allowed"
+				;;
+			esac
+			;;
+		*)
+			error "window position '$_window_position' not allowed"
+			;;
+		esac
+		;;
+	*)
+		error "command '$__xprog' not applied"
+		;;
+	esac
+	echo "$__geometry"
+}
+
+get-windowsize()
+{
+	local	__function__=get-windowsize
+
+	xwininfo -root | awk "$_f_get_windowsize_awk"
+}
+
+set-windowposition()
+{
+	local	__function__=set-windowposition
+
+	case $1 in
+	[lL][tT])
+		_window_position=LeftTop
+		_window_position_name="Left Top"
+		_window_position_abbrev=LT
+		;;
+	[lL][bB])
+		_window_position=LeftBottom
+		_window_position_name="Left Bottom"
+		_window_position_abbrev=LB
+		;;
+	[rR][tT])
+		_window_position=RightTop
+		_window_position_name="Right Top"
+		_window_position_abbrev=RT
+		;;
+	[rR][bB])
+		_window_position=RightBottom
+		_window_position_name="Right Bottom"
+		_window_position_abbrev=RB
+		;;
+	*)
+		error "wrong position parameter '$1'"
+		;;
+	esac
+}
+
+
+fi # [ -z "$_xc_loaded" ]
+
+_xc_loaded=:

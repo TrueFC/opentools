@@ -1,0 +1,4463 @@
+#!/bin/sh
+#-*- mode:sh; tab-width: 8; -*-
+# ex:ts=8
+#
+# Copyright (c) 2016 Kazuhiko Kiriyama <kiri@OpenEdu.org>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
+if [ -z "$_subc_loaded" ]; then
+
+_subc_loaded="YES"
+
+
+_f_capitalize_awk='
+BEGIN {
+	str = ""
+}
+{
+	lstr = length($0)
+	if (lbase > 0) {
+		lhead = lstr - lbase
+	}
+	str = toupper(substr($0, 1, lhead))substr($0, lhead + 1, lstr)
+}
+END {
+	print str
+}'
+
+_f_exclude_items_awk='
+BEGIN {
+	results = ""
+	nditems  = ""
+	sep = sep ? sep : "[[:space:]]+"
+}
+{
+	nexc_items = split(items, exc_items, sep)
+	nall_items = split($0, all_items, /[[:space:]]+/)
+	for (n in exc_items) {
+		for (m in all_items) {
+			if (exc_items[n] == all_items[m]) {
+				delete all_items[m]
+				nditems = nditems ? nditems" "m : m
+			}
+		}
+	}
+}
+END {
+	nnditem = split(nditems, nditem, /[[:space:]]+/)
+	for (i = 1; i <= nall_items; i++) {
+		for (j = 1; j <= nnditem; j++) {
+			if (i == nditem[j]) { break }
+		}
+		if (j  > nnditem) {
+			results = results ? results" "all_items[i] : all_items[i]
+		}
+	}
+	print results
+}'
+
+_f_expand_options_awk='
+BEGIN {
+	noptionsn = split(optonsn, optionn, //)
+	noptionsv = split(optonsv, optionv, //)
+	args      = ""
+	found     = 0
+	illegal   = 0
+}
+{
+	sub(/^[\-[:space:]]*/, "")
+	noptions = split($0, option, //)
+	for (noption = 1; noption <= noptions; noption++) {
+		for (noptonv in optionv) {
+			if (optionv[noptonv] == option[noption]) {
+				value = substr($0, noption + 1, noptions - noption)
+				args = args ? args" -"option[noption]" "value : "-"option[noption]" "value
+				exit
+			}
+		}
+		for (noptionn in optionn) {
+			if (optionn[noptionn] == option[noption]) {
+				args = args ? args" -"option[noption] : "-"option[noption]
+				found = 1
+				break
+			}
+		}
+		if (! found) {
+			args = "-"option[noption]
+			illegal = 1
+			exit
+		} else {
+			found = 0
+		}
+	}
+}
+END {
+	print args
+	exit illegal
+}'
+
+_f_get_nextline_awk='
+BEGIN {
+	found = 0
+}
+{
+	if (key ~ /^# $/) {
+		exit
+	} else if ($0 ~ "^([[:space:]]*#[^[:space:]]+|" key "[^[:space:]]+)") {
+		next
+	} else if ($0 ~ /^[[:space:]]*[^#[:space:]]+/) {
+		found = 1
+		exit
+	} else {
+		exit
+	}
+}
+END {
+	exit ! found
+}'
+
+_f_get_rootslice_awk='
+BEGIN {
+	rootslice = ""
+	found = 0
+}
+{
+	if ($4 ~ /freebsd-(ufs|zfs)/) {
+		rootslice = $3
+		found = 1
+		exit
+	}
+}
+END {
+	print rootslice
+	exit ! found
+}'
+
+_f_get_spece_nkey_awk='
+BEGIN {
+	nspace = 0
+}
+{
+	if (match($0, /^# +/)) {
+		nspace = RLENGTH - 1
+	}
+}
+END {
+	print nspace
+}'
+
+_f_get_sshostname_awk='
+BEGIN {
+	regex      = "^[[:space:]]*Host[[:space:]]+"host"[[:space:]]*$"
+	hostname   = ""
+	found      = 0
+	found_host = 0
+}
+{
+	if (! found_host) {
+		if (! match($0, regex)) next
+		found_host = 1
+		next
+	}
+	if (/^[[:space:]]*Host[[:space:]]+/) exit
+	if (/^[[:space:]]*HostName[[:space:]]+/) {
+		sub(/^[[:space:]]*HostName[[:space:]]+/, "")
+		sub(/[[:space:]]*$/, "")
+		hostname = $0
+		found = 1
+	}
+}
+END {
+	print hostname
+	exit ! found
+}'
+
+_f_get_sshport_awk='
+BEGIN {
+	regex      = "^[[:space:]]*Host[[:space:]]+"host"[[:space:]]*$"
+	port       = ""
+	found      = 0
+	found_host = 0
+}
+{
+	if (! found_host) {
+		if (! match($0, regex)) next
+		found_host = 1
+		next
+	}
+	if (/^[[:space:]]*Host[[:space:]]+/) exit
+	if (/^[[:space:]]*Port[[:space:]]+/) {
+		sub(/^[[:space:]]*Port[[:space:]]+/, "")
+		sub(/[[:space:]]*$/, "")
+		port = $0
+		found = 1
+	}
+}
+END {
+	print port
+	exit ! found
+}'
+
+_f_get_sshusername_awk='
+BEGIN {
+	regex      = "^[[:space:]]*Host[[:space:]]+"host"[[:space:]]*$"
+	username   = ""
+	found      = 0
+	found_host = 0
+}
+{
+	if (! found_host) {
+		if (! match($0, regex)) next
+		found_host = 1
+		next
+	}
+	if (/^[[:space:]]*Host[[:space:]]+/) exit
+	if (/^[[:space:]]*User[[:space:]]+/) {
+		sub(/^[[:space:]]*User[[:space:]]+/, "")
+		sub(/[[:space:]]*$/, "")
+		username = $0
+		found = 1
+	}
+}
+END {
+	print username
+	exit ! found
+}'
+
+_f_get_values_awk='
+BEGIN {
+	value = ""
+}
+{
+	sub("^" key op "[[:space:]]+", "")
+	sub(/[[:space:]]*$/, "")
+	value = $0
+}
+END {
+	print value 
+}'
+
+_f_include_awk='
+BEGIN {
+	found  = 0
+}
+{
+	if (! $0) { exit }
+	sub(/[[:space:]]*$/, "")
+	sub(/^[[:space:]]*/, "")
+	for (i = 1; i <= split($0, field, sep); i++) {
+		for (j = 1; j <= split(strings, string, sep); j++) {
+			if (field[i] == string[j]) {
+				found = 1
+				exit
+			}
+		}
+	}
+}
+END {
+	exit ! found
+}'
+
+_f_include_port_awk='
+BEGIN {
+	found  = 0
+}
+{
+	if (! $0) { exit }
+	sub(/\)[[:space:]]*$/, "")
+	sub(/^\([[:space:]]*/, "")
+	split($0, field, /;/)
+	if (field[1] ~ /^[0-9]+$/) {
+		found = 1
+		exit
+	}
+}
+END {
+	exit ! found
+}'
+
+_f_isinclude_lines_awk='
+BEGIN {
+	sub(/[[:space:]]*$/, "", lines)
+	sub(/^[[:space:]]*/, "", lines)
+	nlines = split(lines, line, /\n/)
+	nldata = 0
+	ndata  = 1
+	nline = 1
+	found  = 0
+}
+{
+	if (nline <= nlines) {
+		if (match($0, "^" line[nline] "$")) {
+			if (! nldata) {
+				nldata = ndata
+			} else if (ndata == nldata + 1) {
+				if (nline == nlines) {
+					found = 1
+					exit
+				}
+				++nldata
+			} else {
+				exit
+			}
+			++nline
+		}
+		++ndata
+		next
+	}
+}
+END {
+	exit ! found
+}'
+
+_f_lines_to_any_separated_string_awk='
+BEGIN {
+	string = ""
+}
+{
+	if (tab) {
+		gsub(/\t/, "\\t")
+	}
+	string = string ? string sep $0 : $0
+}
+END {
+	print string
+}'
+
+_f_lines_to_newlined_awk='
+BEGIN {
+	string = ""
+}
+{
+	nfield = split($0, field, /[[:space:]]+/)
+	if (get_lines) { exit }
+	for (i = 1; i <= nfield; i++) {
+		string = string ? string"\n"field[i] : field[i]
+	}
+}
+END {
+	if (get_lines) {
+		print nfield
+	} else {
+		print string
+	}
+}'
+
+_f_lines_to_newlined_string_awk='
+BEGIN {
+	string = ""
+}
+{
+	string = string ? string"\\n"$0 : $0
+}
+END {
+	print string
+}'
+
+_f_lines_to_quoted_string_awk='
+BEGIN {
+	string = ""
+}
+{
+	string = string ? string" \""$0 : $0"\""
+}
+END {
+	print string
+}'
+
+_f_push_port_awk='
+BEGIN {
+	directive = port
+	found      = 0
+}
+{
+	if(! $0) {
+		sub(/^\([[:space:]]*/, "")
+		sub(/\)[[:space:]]*$/, "")
+		nfield = split($0, field, /;/)
+		if (nfield > 1) {
+			for (i = 1; i <= nfield; i++) {
+				directive = directive";"field[i]
+			}
+		}
+	}
+	directive = "(" directive ")"
+}
+END {
+	print directive
+	exit ! found
+}'
+
+_f_sortg_awk='
+BEGIN {
+	label  = ""
+	values = ""
+	lines  = ""
+}
+{
+	for (i = 1; i <= split($0, field, ":"); i++) {
+		sub(/^[[:space:]]*/, "", field[i])
+		sub(/[[:space:]]*$/, "", field[i])
+	}
+	if (field[1] == label || label == "") {
+		values = values ? values" "field[2] : field[2]
+		label  = field[1]
+	} else {
+		line   = label ":" values
+		lines  = lines ? lines"\n"line : line
+		label  = field[1]
+		values = field[2]
+	}
+}
+END {
+	line   = label ":" values
+	lines  = lines ? lines"\n"line : line
+	print lines
+}'
+
+_f_splice_awk='
+BEGIN {
+	sub(/[[:space:]]*$/, "", lines)
+	sub(/^[[:space:]]*/, "", lines)
+	nalines     = split(lines, aline, /\n/)
+	slines      = ""
+	append      = 0
+}
+{
+	sline  = $0
+	slines = slines ? slines"\n"sline : sline
+	if (sline !~ /^[[:space:]]*$/) {
+		if (sline ~ "^" key) {
+			for (naline = 1; naline <= nalines; naline++) {
+				slines = slines"\n"aline[naline]
+			}
+			if (newline) {
+				slines = slines"\n"
+			}
+			append = 1
+			next
+		}
+	}
+}
+END {
+	print slines
+	exit ! append
+}'
+
+_f_stremb_awk='
+BEGIN {
+	sleft  = ""
+	sright = ""
+}
+{
+	sub(/[[:space:]]*$/, "")
+	sub(/^[[:space:]]*/, "")
+	str = $0
+	lstr = length(str)
+	right = lstr + left
+	if (right <= width) {
+		for (i = 1; i < left; i++) {
+			sleft = sleft char
+		}
+		for (i = 1; i <= width - right + 1; i++) {
+			sright = sright char
+		}
+	} else {
+		for (i = 1; i < left; i++) {
+			sleft = sleft " "
+		}
+	}
+}
+END {
+	print sleft str sright
+}'
+
+
+_include()
+{
+	local	__target					\
+		__function					\
+		__function__=_include
+
+	eval __target=\$$#
+	putdebug 1 0 _include __target
+	set -- $(echo $* | sed -Ee "s|[[:space:]]+$__target$||")
+	rm -f $TEMPDIR/_include
+	for __function in $*; do
+		putdebug 1 0 _include __function
+		sed -nEe "/^$__function\(\)$/,/^}$/p" $__target >> $TEMPDIR/_include
+	done
+	. $TEMPDIR/_include
+}
+
+andstr()
+{
+	local	__function__=andstr				\
+		__mode
+
+	while [ $# -gt 1 ]; do
+		case $1 in
+		-c)
+			__mode='connect'
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	connect)
+		eval echo \"'${'$1'}'\" | \
+			sed -Ee 's/[[:space:]]+/_/g' -e 's/[-.]/_/g'
+		;;
+	*)
+		eval echo \"'${'$1'}'\" | \
+			sed -Ee 's/[[:space:]]+/,/g' | \
+			sed -Ee 's/([^,]+),([^,]+)$/\1 and \2/'
+		;;
+	esac
+}
+
+append()
+{
+	local	__function__=append				\
+		__insert_after_key=false			\
+		__insert_blankline=false			\
+		__key						\
+		__str						\
+		__str_add
+	
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b)
+			__insert_blankline=true
+			;;
+		-k)
+			__insert_after_key=true
+			shift
+			__key="$1"
+			;;
+		-*)
+			error  "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__var=$1
+	putdebug 1 1 __str __str_add
+	__str=$(eval echo -n \"'${'$1'}'\")
+	__str_add=$(eval echo -n \"'${'$2'}'\")
+	if [ -n "$__str" -a -n "$__str_add" ]; then
+		putdebug 1 2 __str __str_add
+		if $__insert_after_key; then
+			if $__insert_blankline; then
+				__str=$(splice -b "$__key" __str __str_add)
+			else
+				__str=$(splice "$__key" __str __str_add)
+			fi
+		else
+			if $__insert_blankline; then
+				__str=$(printf "%s\n\n%s\n" "$__str"  "$__str_add")
+			else
+				__str=$(printf "%s\n%s\n" "$__str"  "$__str_add")
+			fi
+		fi
+	elif [ -n "$__str" -a -z "$__str_add" ]; then
+		putdebug 1 3 __str __str_add
+		__str=$(printf "%s\n" "$__str")
+	elif [ -z "$__str" -a -n "$__str_add" ]; then
+		putdebug 1 4 __str __str_add
+		__str=$(printf "%s\n" "$__str_add")
+	else
+		putdebug 1 5 __str __str_add
+		__str=""
+	fi
+	eval $__var="\$__str"
+}
+
+backup()
+{
+	local	__function__=backup				\
+		__srcs						\
+		__src
+
+	if echo "$*" | egrep -q -e '{|}'; then
+		__srcs="$(glob-csh \"$*\")"
+	else
+		__srcs="$*"
+	fi
+	set -- $__srcs
+	while [ $# -ge 1 ] ; do
+		__src=$1
+		backup1 $__src
+		shift
+	done
+}
+
+backup1()
+{
+	local	__function__=backup1				\
+		__src=$1					\
+		__src_basedir					\
+		__src_dirname
+
+	if [ -f $__src ]; then
+		if [ -f $__src.org ]; then
+			if [ ! -f $__src.bak -a -e $__src.bak ]; then
+				error  "'$__src.bak' is not a file"
+			fi
+			echo -n '- '
+			cp -v -p $__src $__src.bak
+		elif [ -e $__src.org ]; then
+			warn "'$__src.org' is not a file"
+			if [ ! -f $__src.bak -a -e $__src.bak ]; then
+				error "'$__src.bak' is not a file"
+			fi
+			echo -n '- '
+			cp -v -p $__src $__src.bak
+		else
+			echo -n '- '
+			cp -v -p $__src $__src.org
+		fi
+	elif [ -d $__src ]; then
+		__src_basedir=$(dirname $__src)
+		__src_dirname=$(basename $__src)
+		if [ -d $__src.org ]; then
+			if [ -d $__src.bak ]; then
+				rm -rf $__src.bak
+			elif [ -e $__src.bak ]; then
+				error "'$__src.bak' is not a directory"
+			fi
+			printf "d %s -> %s\n" $__src "$__src_basedir/$__src_dirname.bak"
+			mkdir -p $__src_basedir/$__src_dirname.bak
+			(cd $__src; pax -r -w -l -p e -P . $__src_basedir/$__src_dirname.bak)
+		elif [ -e $__src.org ]; then
+			warn "'$__src.org' is not a directory"
+			if [ ! -d $__src.bak ]; then
+				error "'$__src.bak' is not a directory"
+			fi
+			printf "d %s -> %s\n" $__src "$__src_basedir/$__src_dirname.bak"
+			mkdir -p $__src_basedir/$__src_dirname.bak
+			(cd $__src; pax -r -w -l -p e -P . $__src_basedir/$__src_dirname.bak)
+		else
+			printf "d %s -> %s\n" $__src "$__src_basedir/$__src_dirname.org"
+			mkdir -p $__src_basedir/$__src_dirname.org
+			(cd $__src; pax -r -w -l -p e -P . $__src_basedir/$__src_dirname.org)
+		fi
+	elif [ -e $__src ]; then
+		error "'$__src' is not a file or a directory"
+	else
+		error "'$__src' is not found"
+	fi
+}
+
+bhyve-running()
+{
+	local	__function__=bhyve-running			\
+		__vmname=$1
+
+	if (ps -ax | egrep -q -e " bhyve: $__vmname \(bhyve\)$") \
+	    && (ls /dev/vmm | egrep -q -e "$__vmname"); then
+		return 0
+	else
+		return 1
+	fi
+}
+
+bgrep()
+{
+	local	__function__=bgrep				\
+		__key_end					\
+		__key_start					\
+		__mode						\
+		__quiet_run=false				\
+		__retrieve					\
+		__target
+
+	while [ $# -gt 1 ]; do
+		case $1 in
+		-k)
+			__mode='identify'; shift
+			__key_identify="$1"
+			;;
+		-q)
+			__quiet_run=true
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__target=$(eval echo \"'${'$1'}'\")
+	__retrieve=$(eval echo \"'${'$2'}'\")
+	case $__mode in
+	identify)
+		if echo "$__retrieve" | egrep -qwe "^[[:space:]]*$__key_identify"; then
+			__key_identify=$(echo "$__retrieve" | egrep -we "^[[:space:]]*$__key_identify")
+		else
+			if $__quiet_run; then
+				return 1
+			else
+				error "identify key '$__key_identify' not found"
+			fi
+		fi
+		__key_start=$(echo "$__retrieve" | sed -nEe '1p')
+		__key_end=$(echo "$__retrieve" | sed -nEe '$p')
+		__target=$(echo "$__target" | sed -nEe "/$__key_start/,$$p")
+		putdebug -s 1 0 __target
+		while [ -n "$__target" ]; do
+			__retrieved=$(echo "$__target" | sed -nEe "1,/$__key_end/p")
+			if echo "$__retrieved" | egrep -q -e "^$__key_identify$"; then
+				break
+			else
+				__retrieved=""
+				__target=$(echo "$__target" | sed -Ee "1,/$__key_end/d")
+			fi
+			__target=$(echo "$__target" | sed -nEe "/$__key_start/,$$p")
+		done
+		;;
+	*)
+		__key_start=$(echo "$__retrieve" | sed -nEe '1p')
+		__key_end=$(echo "$__retrieve" | sed -nEe '$p')
+		__retrieved=$(echo "$__target" | \
+					sed -nEe "/$__key_start/,$$p" | \
+					sed -nEe "1,/$__key_end/p")
+		putdebug 1 0 __retrieved
+		;;
+	esac
+	if [ -n "$__retrieved" ]; then
+		if $__quiet_run; then
+			return 0
+		else
+			echo "$__retrieved"
+		fi
+	fi
+}
+
+cadmin()
+{
+	local	__acccount					\
+		__function__=cadmin				\
+		__gecos						\
+		__gid						\
+		__homedir					\
+		__name						\
+		__passwd					\
+		__password					\
+		__rootdir="/etc"				\
+		__shell						\
+		__uid
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			__rootdir=$1
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if [ $# -ne 7 ]; then
+		error "specify correct arguments"
+	fi
+	__name=$1
+	__password=$2
+	__uid=$3
+	__gid=$4
+	__gecos=$5
+	__homedir=$6
+	__shell=$7
+	__acccount="$__name:$__password:$__uid:$__gid::0:0:$__gecos:$__homedir:$__shell"
+	__passwd="$__rootdir/master.passwd"
+	if rreplace -s ':' "$__account" $__passwd;  then
+		runc pwd_mkdb -d $__rootdir $__passwd
+	fi
+}
+
+capitalize()
+{
+	local	__base_specified=false				\
+		__function__=capitalize				\
+		__head_specified=false				\
+		__lbase=0					\
+		__lhead=1					\
+		__str
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b)
+			$__head_specified && error "not allow with '-h'"
+			shift
+			__lbase=$1
+			__base_specified=true
+			;;
+		-h)
+			$__base_specified && error "not allow with '-b'"
+			shift
+			__lhead=$1
+			__head_specified=true
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__str=$1
+	echo $__str | awk -v lbase=$__lbase -v lhead=$__lhead "$_f_capitalize_awk"
+}
+
+catline()
+{
+	local	__aline						\
+		__function__=catline				\
+		__line						\
+		__line_name=$1
+
+	eval __line=\"'${'$__line_name'}'\"
+	eval __aline=\"'${'$2'}'\"
+	__aline=$(echo "$__aline" | awk 'BEGIN{ str = "" }{ sub(/^[[:space:]]*/, ""); sub(/[[:space:]]*\\[[:space:]]*$/, ""); str = $0 } END { print str }')
+	__line="$__line${__line:+ }$__aline"
+	setvar $__line_name "$__line"
+}
+
+check-command()
+{
+	local	__command=$1					\
+		__function__=check-command
+
+	if command -V $__command 2> /dev/null | egrep -q -e '[[:space:]]/[^[:space:]]+$' \
+			|| localcmd $__command; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+check-copyfiles()
+{
+	local	__allfiles					\
+		__files=''					\
+		__files_overlap=''				\
+		__files_selected				\
+		__function__=check-copyfiles			\
+		__ignorefile					\
+		__ignorefile_found_in_srcs=false		\
+		__ignorefiles					\
+		__mode						\
+		__src						\
+		__srcs
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			__mode=actualcopyfiles
+			;;
+		-i)
+			__mode=ignorefiles
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	actualcopyfiles)
+		__allfiles=$1
+		shift
+		__srcs=$*
+		__allfiles=$(printf "`echo $__allfiles | \
+					sed -Ee 's|[[:space:]]+|\\\\\\n|g'`" | sort -r | uniq)
+		for __src in $__srcs; do
+			__files_selected=$(echo "$__allfiles" | egrep -e "^$__src")
+			if [ $(echo "$__files" | wc -l) -gt 0 ]; then
+				if [ -z "$__files" ]; then
+					__files="$__files_selected"
+				else
+					__files=$(printf "%s\n%s" "$__files" "$__files_selected")
+				fi
+			else
+				__files=$(printf "%s\n%s" "$__files" $__src)
+			fi
+		done
+		echo "$__files"
+		;;				
+	ignorefiles)
+		__ignorefiles=$1
+		shift
+		__srcs=$*
+		for __ignorefile in $__ignorefiles; do
+			if echo "$__srcs" | egrep -qwe $__ignorefile; then
+				if [ -z "$__files_overlap" ]; then
+					__files_overlap=$__ignorefile
+				else
+					__files_overlap="$__files_overlap $__ignorefile"
+				fi
+				__ignorefile_found_in_srcs=true
+			fi
+		done
+		if $__ignorefile_found_in_srcs; then
+			error "ignorefile:'$__files_overlap' found in srcs"
+		else
+			return 0
+		fi
+		;;
+	esac
+}
+
+check-debug()
+{
+	local	__function__=check-debug			\
+		__function_name					\
+		__mode=command
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-f)
+			__mode=function
+			shift
+			__function_name=${1%%:*}
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	command)
+		case $_debug_mode in
+		module)
+			if [ -n "$_debug_commands" ]; then
+				if include $COMMAND_NAME "$_debug_commands"; then
+					_debug=true
+				else
+					_debug=false
+				fi
+			else
+				warn "'debug commands' empty"
+				_debug=false
+			fi
+			;;
+		esac
+		;;
+	function)
+		if $_debug; then
+			case $_debug_mode in
+			module)
+				if [ -n "$_debug_functions" ]; then
+					if include $__function_name "$_debug_functions"; then
+						return 0
+					else
+						return 1
+					fi
+				else
+					return 1
+				fi
+				;;
+			level)
+				return 0
+			esac
+		else
+			return 1
+		fi
+		;;
+	esac
+}
+
+check-pathname()
+{
+	local	__function__=check-pathname			\
+		__mode						\
+		__path
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			__mode=absolute
+			;;
+		-r)
+			__mode=relative
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__path=$1
+	if echo $__path | egrep -qe '^/'; then
+		case $__mode in
+		absolute)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+		esac
+	elif echo $__path | egrep -qe '^\./|^\.\./|^~'; then
+		return 0
+	else
+		case $__mode in
+		relative)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+		esac
+	fi
+}
+
+complete-hostform()
+{
+	local	__function__=complete-hostform			\
+		__host						\
+		__hostname=""					\
+		__include_port=false				\
+		__mode=full_form				\
+		__tail=""					\
+		__user=""
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			__include_port=true
+			;;
+		-s)
+			__mode=sshargs_form
+			;;
+		-u)
+			__mode=username_only
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__host=${1%%(*}
+	__tail=${1#$__host}
+	if echo $__host | egrep -q '@'; then
+		__user=${__host%%@*}
+		__host=${__host#*@}
+	fi
+	putdebug 1 1 __host __user
+	if ! is-hostname $__host; then
+		__hostname=$(get-sshostname $__host)
+		if [ $? -gt 0 ]; then
+			error "unknown host '$__host'"
+		fi
+		if [ -z "$__user" ]; then
+			__user=$(get-sshusername $__host)
+			putdebug 1 2 __host __user
+		fi
+	else
+		__hostname=$__host
+	fi
+	if [ -z "$__user" ]; then
+		__user=$USER
+	fi
+	if $__include_port; then
+		if ! include-port "$__tail"; then
+			if exist-sshport -f $__host; then
+				_ssh_port=$(get-sshport $__host)
+				putdebug 1 2 _ssh_port
+			fi
+			__tail=$(push-port "$__tail" $_ssh_port)
+			putdebug 1 3 __tail _ssh_port
+		fi
+	fi
+	case $__mode in
+	sshargs_form)
+		echo "-p $_ssh_port $__user@$__hostname"
+		;;
+	username_only)
+		echo $__user
+		;;
+	*)
+		echo $__user@$__hostname$__tail
+		;;
+	esac
+}
+
+connected()
+{
+	local	__function__=connected				\
+		__is_remote_args=""				\
+		__host
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-f)
+			__is_remote_args='-f'
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if [ $# -lt 1 ]; then
+		if ! is-remote $__is_remote_args; then
+			return 1
+		fi
+	elif [ $# -lt 2 ]; then
+		$_is_remote_checked && warn "already setup, override with '$__host'"
+		__host=$1
+		set-sshport $__host
+		__host=$(complete-hostform $__host)
+		_ssh_user=${__host%%@*}
+		_ssh_host=${__host#$_ssh_user@}
+		_ssh_args="-p $_ssh_port $_ssh_user@$_ssh_host"
+	else
+		error "too many arguments"
+	fi
+	putdebug 1 0 __host _ssh_host
+	if ! isalive-host $_ssh_host; then
+		error "'$_ssh_host' not alive"
+	elif ! isalive-ssh $_ssh_host; then
+		error "'$_ssh_host' not connected with ssh"
+	fi
+}
+
+conv-date-fmt()
+{
+	local	__arg_utc=''					\
+		__date						\
+		__dest_fmt					\
+		__function__=conv-date-fmt			\
+		__hour=0					\
+		__min=0						\
+		__sign						\
+		__src_fmt					\
+		__time						\
+		__tz
+
+	case $1 in
+	-u)
+		shift
+		__tz=$1
+		__time=$(env LANG=C date -j -f "%Z" "$__tz" "+%z")
+		__sign=${__time%%[0-9]*}
+		__time=${__time#${__sign}}
+		__hour=${__time%[0-9][0-9]}
+		__min=${__time#[0-9][0-9]}
+		case $__sign in
+		+)
+			__sign='-'
+			;;
+		-)
+			__sign='+'
+			;;
+		esac
+		__arg_utc="-v$__sign${__hour}H -v$__sign${__min}M"
+		shift
+		;;
+	*)
+		;;
+	esac
+	__date=$1
+	__src_fmt=$2
+	__dest_fmt=$3
+	env LANG=C date $__arg_utc -j -f "$__src_fmt" "$__date" "+$__dest_fmt"
+}
+
+convdate()
+{
+	local	__directive=$1					\
+		__date="$2"					\
+		__fmt_from					\
+		__fmt_to					\
+		__function__=convdate
+
+	case $__directive in
+	d2s)
+		__fmt_from='%Y%m%d'
+		__fmt_to='%s'
+		;;
+	d2u)
+		__fmt_from='%Y%m%d'
+		__fmt_to='%u'
+		;;
+	h2n)
+		__fmt_from='%a %b %d %T %Z %Y'
+		__fmt_to='%Y%m%d%H%M'
+		;;
+	h2t)
+		__fmt_from='%a %b %d %T %Z %Y'
+		__fmt_to='%Y-%m-%dT%T'
+		;;
+	h2T)
+		__fmt_from='%a %b %d %T %Z %Y'
+		__fmt_to='%Y%m%d%H%M%S'
+		;;
+	n2h)
+		__fmt_from='%Y%m%d%H%M'
+		__fmt_to='%a %b %d %T %Z %Y'
+		;;
+	s2d)
+		__fmt_from='%s'
+		__fmt_to='%Y%m%d'
+		;;
+	s2m)
+		__fmt_from='%s'
+		__fmt_to='%m'
+		;;
+	s2u)
+		__fmt_from='%s'
+		__fmt_to='%u'
+		;;
+	s2ym)
+		__fmt_from='%s'
+		__fmt_to='%Y%m'
+		;;
+	T2h)
+		__fmt_from='%Y%m%d%H%M%S'
+		__fmt_to='%a %b %d %T %Z %Y'
+		;;
+	ym2s)
+		__fmt_from='%Y%m'
+		__fmt_to='%s'
+		;;
+	*)
+		error "'$__directive' not supported"
+		;;
+	esac
+	putdebug 1 0 __fmt_from __date __fmt_to
+	env LANG=C TZ=Asia/Tokyo date -j -f "$__fmt_from" "$__date" "+$__fmt_to"
+}
+
+copy()
+{
+	local	__args						\
+		__dest						\
+		__destp						\
+		__eval=false					\
+		__function__=copy				\
+		__mirror_option=false				\
+		__mode_option=false				\
+		__options=''					\
+		__src						\
+		__srcs
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b|-d|-f|-i|-p|-r)
+			__options="$__options${__options:+ }$1"
+			;;
+		-e)
+			__eval=true
+			;;
+		-m)
+			__mode_option=true
+			shift
+			__options="$__options${__options:+ }-m $1"
+			;;
+		-M)
+			__mirror_option=true
+			__mode=mirror
+			;;
+		-P)
+			shift
+			__prefix=$1
+			__args_get-copyfiles="-p $__prefix"
+			;;
+		-x)
+			shift
+			__ignoredirs=$(glob-csh "$1")
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if $__mode_option && $__mirror_option; then
+		error "both '-m' and '-M' should not be specified"
+	fi
+	if echo "$*" | egrep -q -e '{|}'; then
+		__args="$(glob-csh \"$*\")"
+	else
+		__args="$*"
+	fi
+	__srcs=${__args% *}
+	__dest=${__args##* }
+	putdebug 1 0 __srcs __dest
+	if [ -n "$__ignoredirs" ]; then
+		if [ -n "$__prefix" ]; then
+			__ignoredirs=$(echo "$__ignoredirs" | \
+							sed -Ee "s|([^[:space:]]+)|$__prefix\\1|g")
+		fi
+		putdebug 1 1 __srcs __args_get-copyfiles __ignoredirs
+		__srcs=$(get-copyfiles $__args_get-copyfiles "$__ignoredirs" $__srcs)
+	fi
+	case $__mode in
+	mirror)
+		if [ ! -d $__dest ]; then
+			error "destdir must be exist in mirror mode"
+		fi
+		if ! echo $__options | egrep -qwe '-f'; then
+			__options="$__options${__options:+ }-f"
+		fi
+		if ! echo $__options | egrep -qwe '-b'; then
+			__options="$__options${__options:+ }-b"
+		fi
+		__options="$__options${__options:+ }-p"
+		__options="$__options${__options:+ }-r"
+		;;
+	*)
+		if [ $(echo $__srcs|wc -w) -gt 2 ]; then
+			for __src in $__srcs; do
+				if [ -d $__src ]; then
+					error "directory:'$__src' can not be multiple specified in src"
+				fi
+			done
+			__options="$__options${__options:+ }-d"
+		fi
+		;;
+	esac
+	putdebug 1 1 __srcs __dest
+	for __src in $__srcs; do
+		case $__mode in
+		mirror)
+			if [ -n "$__prefix" ]; then
+				__destp=$__dest/$(echo $__src | sed -Ee "s|^$__prefix/||")
+			else
+				__destp=$__dest
+			fi				
+			;;
+		*)
+			__destp=$__dest
+		esac
+		putdebug 1 2 __options __src __destp
+		if $__eval; then
+			mktmpfile
+			eval echo -e \"$(awk "$_f_lines_to_newlined_string_awk" $__src)\" > $_mktmpfiles
+			__src=$_mktmpfiles
+		fi
+		runc copy2 $__options $__src $__destp
+		$__eval && rmtmpfile
+	done
+}
+
+copy2()
+{
+	local	__args='-m 644'					\
+		__backup=true					\
+		__dest						\
+		__dest_ap					\
+		__destbasename					\
+		__destdir=false					\
+		__destdirname					\
+		__destroot=false				\
+		__error_cmd="error"				\
+		__fmode						\
+		__force_copy=false				\
+		__function__=copy2				\
+		__mode_file=false				\
+		__pax_args='-r -w -l -P -Y -Z'			\
+		__preserve=false				\
+		__src						\
+		__srcbasename					\
+		__srcdirname
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b)
+			__backup=false
+			;;
+		-d)
+			__destdir=true
+			;;
+		-f)
+			__force_copy=true
+			;;
+		-i)
+			__error_cmd="warn"
+			;;
+		-m)
+			shift
+			__mode_file=true
+			__fmode=$1
+			;;
+		-p)
+			__preserve=true
+			;;
+		-r)
+			__destroot=true
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__src=$1
+	__dest=$2
+	if [ -z "$__src" -o -z "$__dest" ]; then
+		$__error_cmd "both source and destination must be specified" && return 0
+	fi
+	if $__mode_file && $__preserve; then
+		$__error_cmd "both '-p' and '-m' should not be specified" && return 0
+	fi
+	putdebug 1 1 __preserve __src __dest
+	if [ -d $__src ]; then
+		__srcbasename=$(basename $__src)
+		__srcdirname=$(dirname $__src)
+		__destbasename=$(basename $__dest)
+		__destdirname=$(dirname $__dest)
+		__args="$__pax_args"
+		if [ -d $__dest ]; then
+			if $__backup; then
+				test -e $TEMPDIR/$__destbasename && rm -rf $TEMPDIR/$__destbasename
+				(cd $__destdirname; pax $__args -p e $__destbasename $TEMPDIR)
+				if [ -e $__dest.org ]; then
+					if [ -e $__dest.bak ]; then
+						rm -rf $__dest.bak
+					fi
+					mv $__dest $__dest.bak
+				else
+					mv $__dest $__dest.org
+				fi
+				mv $TEMPDIR/$__destbasename $__dest
+			fi
+			if [ "$__srcbasename" = "$__destbasename" ]; then
+				__dest_ap=$(setap -p $__dest)
+				printf "d %s \-> %s\n" $__src "$__dest"
+				if $__preserve; then
+					__args="$__args -p e"
+				fi
+				putdebug 1 0 __srcdirname __args __srcbasename __dest_ap
+				(cd $__srcdirname; pax $__args $__srcbasename $__dest_ap)
+			else
+				__dest_ap=$(setap $__dest)
+				printf "d %s \-> %s\n" $__src "$__dest"
+				if $__preserve; then
+					__args="$__args -p e"
+					if ! $__destroot; then
+						rm -rf $__dest_ap.latest $TEMPDIR/$__srcbasename
+						putdebug 1 1 __srcdirname __args __srcbasename __dest_ap
+						mv $__dest_ap $__dest_ap.latest
+						(cd $__srcdirname; pax $__args -d $__srcbasename $TEMPDIR)
+						mv $TEMPDIR/$__srcbasename $__dest_ap
+						mv $__dest_ap.latest/* $__dest_ap
+						rm -rf $__dest_ap.latest
+					fi
+				elif $__mode_file; then
+					chmod $__fmode $__dest_ap
+				fi
+				putdebug 1 2 __src __args __dest_ap
+				(cd $__src; pax $__args . $__dest_ap)
+			fi
+		elif [ -e $__dest ]; then
+			$__error_cmd "'$__dest' must be a directory" && return 0
+		else
+			if $__force_copy; then
+				printf "d %s \-> %s\n" $__src "$__dest"
+				if $__preserve; then
+					__args="$__args -p e"
+					__src_ap=$(setap -p $__src)
+					__dest_ap=$(setap -p $__dest)
+					mkdirs $__dest_ap $__src_ap
+					if [ "$__srcbasename" = "$__destbasename" ]; then
+						putdebug 1 3 __srcdirname __args __srcbasename __dest_ap
+						(cd $__src_ap; pax $__args $__srcbasename $__dest_ap)
+					else
+						if ! $__destroot; then
+							rm -rf $TEMPDIR/$__srcbasename
+							putdebug 1 4 __src __args TEMPDIR
+							(cd $__srcdirname; pax $__args -d $__srcbasename $TEMPDIR)
+							mv $TEMPDIR/$__srcbasename $__dest
+						fi
+						__dest_ap=$(setap $__dest)
+						putdebug 1 5 __src __args __dest_ap
+						(cd $__src; pax $__args . $__dest_ap)
+					fi
+				else
+					__dest_ap=$(setap $__dest)
+					mkdir -p $__dest_ap
+					putdebug 1 6 __src __args __dest_ap
+					(cd $__src; pax $__args . $__dest_ap)
+					$__mode_file && chmod $__fmode $__dest_ap
+				fi
+			else
+				$__error_cmd "'$__dest' is not exist" && return 0
+			fi
+		fi
+	elif [ -e $__src ]; then
+		__srcbasename=$(basename $__src)
+		__srcdirname=$(dirname $__src)
+		__destbasename=$(basename $__dest)
+		if [ -d $__dest ]; then
+			if $__backup; then
+				if [ -f $__dest/$__srcbasename.org ]; then
+					if [ -f $__dest/$__srcbasename ]; then
+						mv $__dest/$__srcbasename $__dest/$__srcbasename.bak
+					else
+						warn "'$__dest/$__srcbasename' not found"
+					fi
+				elif [ -f $__dest/$__srcbasename ]; then
+					mv $__dest/$__srcbasename $__dest/$__srcbasename.org
+				fi
+			fi
+			printf "\- %s \-> %s\n" $__src "$__dest"
+			if $__preserve; then
+				__args="$__pax_args -p e"
+				__dest_ap=$(setap $__dest)
+				(cd $__srcdirname; pax $__args $__srcbasename $__dest_ap)
+			else
+				$__mode_file && __args="-m $__fmod"
+				install $__args $__src $__dest
+			fi
+		elif [ -e $__dest ]; then
+			if $__backup; then
+				if [ -f $__dest.org ]; then
+					mv $__dest $__dest.bak
+				else
+					mv $__dest $__dest.org
+				fi
+			fi
+			printf "\- %s \-> %s\n" $__src "$__dest"
+			putdebug 1 2 __preserve __src __dest
+			if $__preserve; then
+				__args="$__pax_args -p e"
+				if [ "$__srcbasename" = "$__destbasename" ]; then
+					__dest_ap=$(setap $__dest)
+					(cd $__srcdirname; pax $__args $__srcbasename $__dest_ap)
+				else
+					(cd $__srcdirname; pax $__args $__srcbasename $TEMPDIR)
+					mv $TEMPDIR/$__srcbasename $__dest
+				fi
+			else
+				putdebug 1 3 __mode_file __args __src __dest
+				$__mode_file && __args="-m $__fmod"
+				install $__args $__src $__dest
+			fi
+		else
+			if $__destdir; then
+				__destdirname=$__dest
+			else
+				__destdirname=$(dirname $__dest)
+			fi
+			__dest_ap=$(setap $__destdirname)
+			putdebug 1 7 __destdirname
+			if [ -d $__destdirname ]; then
+				printf "\- %s \-> %s\n" $__src $__dest
+				if $__preserve; then
+					__args="$__pax_args -p e"
+					if [ "$__srcbasename" = "$__destbasename" ]; then
+						(cd $__srcdirname; pax $__args $__srcbasename $__dest_ap)
+					else
+						(cd $__srcdirname; pax $__args $__srcbasename $TEMPDIR)
+						mv $TEMPDIR/$__srcbasename $__destdirname
+					fi
+				else
+					$__mode_file && __args="-m $__fmod"
+					putdebug 1 8 __args __src __dest
+					install $__args $__src $__dest
+				fi
+			else
+				if $__force_copy; then
+					printf "\- %s \-> %s\n" $__src "$__dest"
+					__srcdirname=$(dirname $__src)
+					putdebug 1 9 __srcdirname __destdirname __dest
+					if $__preserve; then
+						__args="$__pax_args -p e"
+						__src_ap=$(setap $__srcdirname)
+						putdebug 1 10 __srcdirname __destdirname __src_ap __dest_ap
+						mkdirs  $__dest_ap $__src_ap 
+						if $__destdir; then
+							(cd $__srcdirname; pax $__args $__srcbasename $__dest_ap)
+						else
+							if [ "$__srcbasename" = "$__destbasename" ]; then
+								(cd $__srcdirname; pax $__args $__srcbasename $__dest_ap)
+							else
+								(cd $__srcdirname; pax $__args $__srcbasename $TEMPDIR)
+								mv $TEMPDIR/$__srcbasename $__dest
+							fi
+						fi
+					else
+						mkdir -p $__destdirname
+						$__mode_file && __args="-m $__fmod"
+						install $__args $__src $__dest
+					fi
+				else
+					$__error_cmd "'$__destdirname' is not exist" && return 0
+				fi
+			fi
+		fi
+	else
+		$__error_cmd "'$__src' is not exist" && return 0
+	fi	
+}
+
+copyio()
+{
+	local	__args						\
+		__copy2_args="-b -f"				\
+		__dest						\
+		__direction					\
+		__error_cmd="error"				\
+		__eval=false					\
+		__function__=copyio				\
+		__ignore_errors=false				\
+		__image_file					\
+		__mntdir					\
+		__mode						\
+		__src						\
+		__srcs
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b|-d|-f|-p|-r)
+			__copy2_args="$__copy2_args${__copy2_args:+ }$1"
+			;;
+		-e)
+			__eval=true
+			;;
+		-i)
+			__error_cmd="warn"
+			__copy2_args="$__copy2_args${__copy2_args:+ }-i"
+			;;
+		-*)
+			$__error_cmd "unknown option '$1'" && return 0
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if echo "$*" | egrep -q -e '{|}'; then
+		__args="$(glob-csh $*)"
+	else
+		__args="$*"
+	fi
+	putdebug 1 1 __args
+	if [ $(echo $__args | awk '{print NF}') -lt 2 ]; then
+		$__error_cmd "both source and destination must be specified" && return 0
+	fi
+	__srcs=${__args% *}
+	__dest=${__args##* }
+	putdebug 1 2 __srcs __dest
+	if echo $__dest | egrep -q ':'; then
+		if echo "$__srcs" | egrep -q ':'; then
+			$__error_cmd "both src and dest in imagefile" && return 0
+		fi
+		__image_file=${__dest%%:*}
+		__direction=file2img
+	elif echo "$__srcs" | egrep -q ':'; then
+		if ! issame-imagefile $__srcs; then
+			$__error_cmd "src image files are not or same" && return 0
+		fi
+		__image_file=${__srcs%%:*}
+		__direction=img2file
+	else			
+		$__error_cmd "imagefile not specified" && return 0
+	fi
+	if [ $(echo $__srcs | awk '{print NF}') -gt 1 ]; then
+		__mode=multicopy
+	else
+		__mode=singlecopy
+	fi
+	if mount-image $__image_file; then
+		case $__direction in
+		file2img)
+			__dest=${__dest#*:}
+			__dest=$_mntdir$__dest
+			;;
+		img2file)
+			__srcs=$(echo "$__srcs" | awk -v dir="$_mntdir" '{gsub(/[^[:space:]]+:/, dir, $0); print $0}')
+			;;
+		esac
+		case $__mode in
+		multicopy)
+			if [ ! -d $__dest ]; then
+				$__error_cmd "destination must be a directory" && return 0
+			fi
+			for __src in $__srcs; do
+				if $__eval; then
+					mktmpfile
+					eval echo -e \"$(awk "$_f_lines_to_newlined_string_awk" $__src)\" > $_mktmpfiles
+					__src=$_mktmpfiles
+				fi
+				runc copy2 $__copy2_args $__src $__dest${__src#$_mntdir}
+				$__eval && rmtmpfile
+			done
+			;;
+		singlecopy)
+			putdebug 1 3 __srcs __dest __direction
+			if $__eval; then
+				mktmpfile
+				eval echo -e \"$(awk "$_f_lines_to_newlined_string_awk" $__srcs)\" > $_mktmpfiles
+				__srcs=$_mktmpfiles
+			fi
+			runc copy2 $__copy2_args $__srcs $__dest${__src#$_mntdir}
+			$__eval && rmtmpfile
+			;;
+		esac
+		umount-image $__image_file
+	fi
+}
+
+cpcmd()
+{
+	if echo "$1" | egrep -q '^[^:]+:[^:]*$'; then
+		echo "scp"
+	else
+		echo "cp"
+	fi
+}
+
+cpf()
+{
+	local	__args=""					\
+		__function__=cpf				\
+		__nargs=0
+
+	if [ $# -lt 2 ]; then
+		warn "too less arguments"
+		return 1
+	fi
+	while [ $# -gt 1 ]; do
+		if [ ! -e $1 ]; then
+			warn "'$1' not founnd. not copy"
+			shift
+			continue
+		else
+			__args="$__args${__args:+ }$1"
+			: $((__nargs += 1))
+			shift
+		fi
+	done
+	if [ $__nargs -lt 1 ]; then
+		warn "copy files not founnd. nothing copied"
+		return 1
+	elif [ $__nargs -lt 2 ]; then
+		if [ ! -d $(dirname $1) ]; then
+			warn "'$(dirname $1)' directory not exists. nothing copied"
+			return 1
+		fi
+	else
+		if [ -f $1 ]; then
+			warn "'$1' must be a directory. nothing copied"
+			return 1
+		elif [ ! -d $1 ]; then
+			warn "'$1' directory not exists. nothing copied"
+			return 1
+		fi
+	fi
+	runc cp $__args $1
+}
+
+create-sublist()
+{
+	local	__function__=create-sublist			\
+		__list						\
+		__mode=row					\
+		__var
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			__mode=parallel
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__vars=$*
+	for __var in $__vars; do
+		case $__var in
+		*=*)
+			;;
+		*)
+			__value=$(eval echo '${'$__var'}')
+			;;
+		esac
+		if echo "$__value" | egrep -q '[[:space:]]+'; then
+			__value=$(echo $__value | sed -Ee "s/^(.*)$/'\1'/")
+		fi
+		case $__var in
+		*=*)
+			;;
+		*)
+			__var="$__var=$__value"
+			;;
+		esac
+		case $__mode in
+		parallel)
+			__list="$__list${__list:+\n}$__var"
+			;;
+		*)
+			__list="$__list${__list:+ }$__var"
+			;;
+		esac
+	done
+	printf "$__list"
+}
+
+doing()
+{
+	local	__dkgname					\
+		__finish=false					\
+		__function__=doing				\
+		__time
+
+	case $1 in
+	-l)
+		shift
+		if [ $# -lt 1 ]; then
+			error "'dkgname' not specified"
+		fi
+		__dkgname=$1
+		trap "__finish=true" 6
+		__time=0
+		putime -s $__dkgname
+		while true; do
+			if $__finish; then
+				putime -e $__dkgname
+				putime -S $__dkgname
+				break
+			fi
+			: $((__time += 1))
+			putdebug 1 0 __time _log_rotate_interval
+			if [ $((__time % _log_rotate_interval)) -eq 0 ]; then
+				putdebug 1 1 _logfile _logfile_owner _logfile_mode _log_rotate_count _log_rotate_size _log_rotate_when _logfile_sufx _logcommpresscmd
+				logrotate $__dkgname
+			fi
+			sleep 1
+		done
+		;;
+	*)
+		echo -n "$1"
+		trap "__finish=true" 6
+		while true; do
+			if $__finish; then
+				echo -n 'done'
+				break
+			else
+				echo -n '.'
+				sleep 1
+			fi
+		done
+		tput dl
+		sleep 1
+		;;
+	esac
+}
+
+domain2ip()
+{
+	if [ $# -lt 1 ]; then
+		host -t a $(hostname) | awk '$NF ~ /^([0-9]+\.)+[0-9]+$/{print $NF}'
+	elif [ $# -lt 2 ]; then
+		if is-ipaddress $1; then
+			echo "$1"
+			return 0
+		else
+			host -t a $1 | awk '$NF ~ /^([0-9]+\.)+[0-9]+$/{print $NF}'
+		fi
+	else
+		return 1
+	fi
+}
+
+ediff()
+{
+	local	__file_org					\
+		__file_ref					\
+		__function__=ediff				\
+		__mode=default					\
+		__rcode						\
+		__sufx						\
+		__tmpfile_org					\
+		__tmpfile_ref					\
+		__tmpfiles=""
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-d)
+			__mode=diff
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__file_org=$1
+	__file_ref=$2
+	if [ ! -f $__file_org -o ! -f $__file_ref ]; then
+		error "'$__file_org' or '$__file_ref' not found"
+	fi
+	putdebug 1 1 __file_org __file_ref
+	case $__mode in
+	diff)
+		mktmpfile 2
+		__tmpfile_org=${_mktmpfiles%% *}
+		__tmpfile_ref=${_mktmpfiles##* }
+		putdebug 1 2 _mktmpfiles __tmpfile_org __tmpfile_ref
+		for __sufx in org ref; do
+			__dummy1=$(eval echo \$\{__file_$__sufx\})
+			__dummy2=$(eval echo \$\{__tmpfile_$__sufx\})
+			putdebug 1 3 __sufx __dummy1 __dummy2
+			sed -Ee 's,^(---|\+\+\+) ([[:alnum:]/.\-_]+)[[:blank:]]+[[:digit:]\-]+ .*,\1 \2,g' \
+				$(eval echo \$\{__file_$__sufx\}) > $(eval echo \$\{__tmpfile_$__sufx\})
+		done
+		putdebug 1 4 __tmpfile_org __tmpfile_ref
+		diff -u $__tmpfile_org $__tmpfile_ref
+		;;
+	*)
+		diff -u $__file_org $__file_ref
+		;;
+	esac
+	__rcode=$?
+	rmtmpfile
+	return $__rcode
+}
+
+empty()
+{
+	local	__function__=empty				\
+		__mode=file					\
+		__size=0
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-d)
+			__mode=directory
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	file)
+		test ! -f $1 && error "'$1' not a file"
+		__size=$(($(env LANG=C BLOCKSIZE= ls -l $1 | awk '{print $5}')))
+		;;
+	directory)
+		test ! -d $1 && error "'$1' not a directory"
+		__size=$(($(env LANG=C BLOCKSIZE= ls -l $1 | head -1 | awk '{print $2}')))
+		;;
+	esac
+	if [ $__size -gt 0 ]; then
+		return 1
+	else
+		return 0
+	fi
+}
+
+error()
+{
+	echo 1>&2 "*** ERROR[$COMMAND_NAME:$__function__]:$1"
+	if ! $_ignore_error; then
+		exit 1
+	fi
+}
+
+escape-char()
+{
+	local	__str
+
+	__str=$(echo "$1" | sed -Ee 's/([+\$*\(\)#&><;|])/\\\1/g')
+	echo "$__str"
+}
+
+eval-lines()
+{
+	local	__function__=eval-lines				\
+		__lines
+
+	eval __lines=\"'${'$1'}'\"
+	putdebug -v 1 1 __lines
+	__lines=$(echo "$__lines"| awk -v sep='\\n' -v tab=1 "$_f_lines_to_any_separated_string_awk")
+	putdebug 1 2 __lines
+	__lines=$(evar "$__lines")
+	putdebug 1 3 __lines
+	echo -e "$__lines"
+}
+
+evar()
+{
+	local	__str
+
+	__str=$(echo "$@" | sed -Ee 's/([`"*\(\)#&><;| ])/\\\1/g' -e "s/(')/\\\\\1/g")
+	eval echo $__str
+}
+
+exclude()
+{
+	local	__function__=exclude				\
+		__items						\
+		__items_name					\
+		__sep='[[:space:]]+'
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-s)
+			shift
+			__sep="$1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__items_name=$1
+	eval __items=$(echo \"'${'$__items_name'}'\")
+	__items=$(echo "$__items" | awk -v items="$2" -v sep="$__sep" "$_f_exclude_items_awk")
+	setvar $__items_name "$__items"
+}
+
+exist-sshport()
+{
+	local	__force=false					\
+		__function__=exist-sshport			\
+		__host
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-f)
+			__force=true
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__host=$1
+	if [ ! -f $_ssh_config ]; then
+		if ! $__force; then
+			error "$_ssh_config not found"
+		else
+			return 1
+		fi
+	fi
+	awk -v host="$__host" "$_f_get_sshport_awk" $_ssh_config > /dev/null 2>&1
+}
+
+expand-options()
+{
+	awk -v optonsn="$1" -v optonsv="$2" "$_f_expand_options_awk"
+}
+
+frotate()
+{
+	local	__function__=frotate				\
+		__logfile					\
+		__logfiledir					\
+		__logfilename					\
+		__logfiles					\
+		__n
+
+	__logfilename=$(basename $_logfile)
+	__logfiledir=$(dirname $_logfile)
+	__logfiles=$(ls $_logfile.*$_logfile_sufx 2> /dev/null | sort -r)
+	if [ -z "$__logfiles" ]; then
+		__n=0
+	else
+		: $((__n = $(echo "$__logfiles" | wc -l)))
+	fi
+	putdebug 1 0 __n _log_rotate_count 
+	if [ $__n -gt 0  -a  $__n -lt $_log_rotate_count ]; then
+		putdebug 1 1 __logfiles
+		for __logfile in $__logfiles; do
+			putdebug 1 2 __logfile __logfiledir __logfilename _logfile_sufx __n
+			mv $__logfile $__logfiledir/$__logfilename.$__n$_logfile_sufx
+			: $((__n -= 1))
+		done
+	elif [ $__n -eq $_log_rotate_count ]; then
+		__logfiles=$(poped __logfiles)
+		for __logfile in $__logfiles; do
+			: $((__n -= 1))
+			mv $__logfile $__logfiledir/$__logfilename.$__n$_logfile_sufx
+		done
+	elif [ $__n -gt $_log_rotate_count ]; then
+		while [ $__n  -ge $((_log_rotate_count - 1)) ]; do
+			pop __logfile __logfiles
+			rm -f $__logfile
+			: $((__n -= 1))
+		done
+		for __logfile in $__logfiles; do
+			mv $__logfile $__logfiledir/$__logfilename.$__n$_logfile_sufx
+			: $((__n -= 1))
+		done
+	fi
+}
+
+get-comment()
+{
+	local	__function__=get-comment			\
+		__mode=sh
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	sh)
+		echo "$1" | sed -Ee 's/^#[[:space:]]*//'
+		;;
+	esac
+}
+
+get-copyfiles()
+{
+	local	__dir						\
+		__dirs=''					\
+		__function__=get-copyfiles			\
+		__ignoredirs					\
+		__pdir						\
+		__pdirs=''					\
+		__ppdir=''					\
+		__rootdir='/'					\
+		__sdir						\
+		__srcs						\
+		__xdirs='^\.$|^\.\.$'				\
+		__xrdirs='^\.$|^\.\.$'
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			shift
+			__rootdir=$1
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__ignoredirs=$1
+	shift
+	__srcs=$*
+	if [ -z "$__ignoredirs" ]; then
+		echo $__srcs
+		return 0
+	fi
+	check-copyfiles -i "$__ignoredirs" $__srcs
+	__ignoredirs=$(printf "`echo $__ignoredirs | \
+					sed -Ee 's|[[:space:]]+|\\\\\\n|g'`" | sort -r | uniq)
+	__ignoredirs=$(sortp __ignoredirs)
+	putdebug 1 0 __ignoredirs __srcs __rootdir
+	while [ -n "$__ignoredirs" ]; do
+		putdebug 1 1 __ignoredirs
+		for __dir in $__ignoredirs; do
+			__pdir=$(dirname $__dir)
+			__sdir=$(basename $__dir)
+			putdebug 1 2 __dir __ppdir __pdir __sdir __xdirs
+			if [ -z "$__ppdir" -o "$__ppdir" = "$__pdir" ]; then
+				if [ "$__pdir" = "$__rootdir" ]; then
+					__xrdirs="$__xrdirs|^$__sdir$"
+				else
+					__xdirs="$__xdirs|^$__sdir$"
+				fi
+			else
+				if [ -z "$__dirs" ]; then
+					__dirs=$(ls -a $__ppdir | egrep -ve "$__xdirs" \
+							| sed -Ee "s|^|$__ppdir/|")
+				else
+					__dirs="$__dirs $(ls -a $__ppdir | egrep -ve \"$__xdirs\" \
+							| sed -Ee \"s|^|$__ppdir/|\")"
+				fi
+				if [ "$__pdir" = "$__rootdir" ]; then
+					__xrdirs="$__xrdirs|^$__sdir$"
+				else
+					__xdirs="^\.$|^\.\.$|^$__sdir$"
+				fi
+				if [ -z "$__pdirs" ]; then
+					__pdirs="$__ppdir"
+				else
+					__pdirs=$(printf "%s\n%s" "$__pdirs" $__ppdir)
+				fi
+			fi
+			__ppdir=$__pdir
+		done
+		putdebug 1 3 __ppdir __xdirs
+		if [ "$__ppdir" != "$__rootdir" ]; then
+			__dirs="$__dirs $(ls -a $__ppdir | egrep -ve \"$__xdirs\" \
+					| sed -Ee \"s|^|$__ppdir/|\")"
+		fi
+		if [ -z "$__pdirs" ]; then
+			__pdirs="$__ppdir"
+		else
+			__pdirs=$(printf "%s\n%s" "$__pdirs" $__ppdir)
+		fi
+		__ignoredirs=$(echo "$__pdirs" | egrep -ve "^$__rootdir$")
+		__ignoredirs=$(sortp __ignoredirs)
+		__xdirs='^\.$|^\.\.$'
+		__ppdir=''
+		__pdirs=''
+		putdebug 1 4 __ignoredirs
+	done
+	putdebug 1 5 __xrdirs
+	if [ -n "$__xrdirs" ]; then
+	   __dirs="$__dirs $(ls -a $__rootdir | egrep -ve \"$__xrdirs\" \
+				| sed -Ee \"s|^|$__rootdir/|\")"
+	fi
+	putdebug 1 6 __dirs __srcs
+	check-copyfiles -a "$__dirs" $__srcs
+}
+
+get-fstype()
+{
+	local	__dest_host					\
+		__dest_path					\
+		__function__=get-fstype				\
+		__mode
+
+	if echo $1 | egrep -q ':'; then
+		__dest_host=$(complete-hostform ${1%%:*})
+		__dest_path=${1#*:}
+		__mode=remote
+	else
+		__dest_path=$1
+		__mode=local
+	fi
+	
+	putdebug 1 0 __mode
+	case $__mode in
+	local)
+		putdebug 1 1 __dest_path
+		mount | egrep -m1 $__dest_path | cut -d ' ' -f 4 | sed -Ee 's/^\((.*)[,\)]/\1/'
+		;;
+	remote)
+		putdebug 1 2 _ssh_port __dest_host __dest_path
+		ssh -p $_ssh_port $__dest_host "mount | egrep -m1 $__dest_path | cut -d ' ' -f 4 | sed -Ee 's/^\((.*)[,\)]/\1/'"
+		;;
+	esac
+}
+
+get-geom()
+{
+	local	__dev						\
+		__function__=get-geom				\
+		__mode
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-s)
+			__mode=startblock
+			;;
+		-r)
+			__mode=restblock
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__dev=$1
+	case $__mode in
+	startblock)
+		gpart show $__dev | awk '/- free -/{print $1}'
+		;;
+	restblock)
+		gpart show $__dev | awk '/- free -/{print $2}'
+		;;
+	*)
+		error "unknown mode '$__mode'"
+		;;
+	esac
+}
+
+get-keys()
+{
+	local	__function__=get-keys				\
+		__key						\
+		__mode						\
+		__op=none
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-k)
+			__mode=key
+			;;
+		-o)
+			__mode=operator
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $1 in
+	*+)
+		__key=${1%%+}
+		__op=plus
+		putdebug 1 1 __key __op
+		;;
+	*)
+		__key=$1
+		;;
+	esac
+	putdebug 1 2 __mode
+	case $__mode in
+	key)
+		echo "$__key"
+		;;
+	operator)
+		echo $__op
+		;;
+	esac
+}
+
+get-loginfo()
+{
+	local	__flags						\
+		__function__=get-loginfo			\
+		__mode
+
+	while [ $# -gt 0 ] ; do
+		case $1 in
+		-s)
+			__mode=suffix
+			;;
+		-c)
+			__mode=ccommand
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__flags=$*
+	case $__mode in
+	suffix)
+		case $__flags in
+		*X*)
+			echo '.xz'
+			;;
+		*J*)
+			echo '.bz2'
+			;;
+		esac
+		;;
+	ccommand)
+		case $__flags in
+		*X*)
+			echo 'xz -z'
+			;;
+		*J*)
+			echo 'bzip2 -z'
+			;;
+		esac
+		;;
+	esac
+}
+
+get-mntdir()
+{
+	local	__mount_cmd=${1:-mount}
+
+	${__mount_cmd} | awk -v mntdir0=$MNTDIR '
+		BEGIN{
+			ndir_max = 0
+			mntdirs = ""
+			found = 0
+		}
+		{
+			if ($3 ~ "^" mntdir0) {
+				mntdirs = mntdirs ? mntdirs" "$3 : $3
+			}
+		}
+		END{
+			for (i = 1; i <= split(mntdirs, mntdir, /[[:space:]]+/); i++) {
+				ndir = mntdir[i]
+				sub("^" mntdir0, "", ndir)
+				if (ndir) {
+					if (ndir > ndir_max) {
+						ndir_max = ndir
+					}
+				}
+				found = 1
+			}
+			print found ? mntdir0 ndir_max + 1 : mntdir0
+		}'
+}
+
+get-nextline()
+{
+	local	__function__=get-nextline			\
+		__key						\
+		__lines						\
+		__mode=normal
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-k)
+			__mode=key_head
+			shift
+			__key="$1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	eval __lines=\"$(echo \"'${'$1'}'\")\"
+	case $__mode in
+	key_head)
+		putdebug 1 0 __key
+		putdebug -v 1 1 __lines
+		echo "$__lines" | awk -v key="$__key" "$_f_get_nextline_awk"
+		;;
+	esac
+}
+
+get-newest()
+{
+	local	__file						\
+		__function__=get-newest				\
+		__newest=$1
+
+	for __file in $*; do
+		if [ ! -f $__file ]; then
+			error "'$__file' not found"
+		fi
+	done
+	shift
+	for __file in $*; do
+		test $__file -nt $__newest && __newest=$__file
+	done
+	echo $__newest
+}
+
+get-rmntdirs()
+{
+	local	__mount_cmd=${1:-mount}
+
+	${__mount_cmd} | awk -v mntdir0=$MNTDIR -v mntdirs="$_mntdirs" '
+		BEGIN{
+			rmntdirs = ""
+			smntdirs = ""
+		}
+		{
+			if ($3 ~ "^" mntdir0) {
+				smntdirs = smntdirs ? smntdirs" "$3 : $3
+			}
+		}
+		END{
+			for (i = 1; i <= split(smntdirs, smntdir, /[[:space:]]+/); i++) {
+				for (j = 1; j <= split(mntdirs, mntdir, /[[:space:]]+/); j++) {
+					if (smntdir[i] == mntdir[j]) {
+						rmntdirs = rmntdirs ? rmntdirs" "mntdir[j] : mntdir[j]
+					}
+				}
+			}
+			print rmntdirs
+		}'
+}
+
+get-rootslice()
+{
+	gpart show $1 | awk "$_f_get_rootslice_awk"
+}
+
+get-space()
+{
+	local	__function__=get-space				\
+		__mode=normal
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-k)
+			__mode=nkey
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	nkey)
+		echo "$1" | awk "$_f_get_spece_nkey_awk"
+		;;
+	esac
+}
+
+get-string()
+{
+	local	__function__=get-string				\
+		__mode=normal
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-k)
+			__mode=key_head
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	key_head)
+		echo "$1" | sed -Ee 's/^(#[[:space:]]*)[^[:space:]]+.*$/\1/'
+		;;
+	esac
+}
+
+get-sshostname()
+{
+	local	__function__=get-sshostname
+
+	putdebug 1 0 _ssh_config
+	if [ ! -f $_ssh_config ]; then
+		error "$_ssh_config not found"
+	fi
+	awk -v host="$1" "$_f_get_sshostname_awk" $_ssh_config
+}
+
+get-sshport()
+{
+	local	__function__=get-sshport
+
+	if [ ! -f $_ssh_config ]; then
+		error "$_ssh_config not found"
+	fi
+	awk -v host="$1" "$_f_get_sshport_awk" $_ssh_config
+}
+
+get-sshusername()
+{
+	local	__function__=get-sshusername
+
+	if [ ! -f $_ssh_config ]; then
+		error "$_ssh_config not found"
+	fi
+	putdebug 1 0 _ssh_config
+	awk -v host="$1" "$_f_get_sshusername_awk" $_ssh_config
+}
+
+get-storage()
+{
+	local	__blocksize					\
+		__function__=get-storage			\
+		__ignore					\
+		__ignoredirs					\
+		__marginrate=100				\
+		__rootdir					\
+		__total
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b)
+			shift
+			__blocksize=$1
+			;;
+		-c)
+			shift	
+			__marginrate=$1
+			;;
+		-i)
+			__ignoredirs="$1"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__rootdir=$1
+	__total=$(env BLOCKSIZE=$__blocksize df $__rootdir | awk '/^\//{print $3}')
+	__ignoredirs=$(echo "$__ignoredirs" | sed -Ee "s|([^[:space:]]+)|$__rootdir\\1|g")
+	__ignore=$(env BLOCKSIZE=$__blocksize du -s $__ignoredirs | awk 'BEGIN{sum=0}{sum+=$1}END{print sum}')
+	echo $(((__total - __ignore) * $__marginrate / 100))
+}
+
+getime-section()
+{
+	local	__function__=getime-section			\
+		__section					\
+		__section_time_file				\
+		__time=''
+
+	case $1 in
+	-s)
+		shift
+		__section_time_file=$DKGDBDIR/+TIME_$(echo $1 | tr '[:lower:]' '[:upper:]')
+		awk '{print $2}' $__section_time_file
+		;;
+	-S)
+		for __section in $_targets; do
+			__section_time_file=$DKGDBDIR/+TIME_$(echo $__section | tr '[:lower:]' '[:upper:]')
+			__time="$(awk '{print $NF}' $__section_time_file)${__time:+ }$__time"
+		done
+		echo $__time
+		;;
+	-t)
+		awk '{print $3}' $DKGDBDIR/+TIME
+		;;
+	*)
+		;;
+	esac	
+}
+
+get-values()
+{
+	local	__function__=get-values				\
+		__key						\
+		__mode						\
+		__op=none					\
+		__op_value					\
+		__val						\
+		__vals=""					\
+		__value=""
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-o)
+			shift
+			__op=$1
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__key="$1"
+	shift
+	putdebug 1 0 __op __key
+	case $__op in
+	plus)
+		__op_value='\\+'
+		;;
+	none)
+		__op_value=''
+		;;
+	*)
+		error "'$__op' not allowed"
+		;;
+	esac
+	__value=$(echo "$*" | awk -v key="$__key" -v op="$__op_value" "$_f_get_values_awk")
+	putdebug 1 1 __value
+	case $__key in
+	PORTSWRKDIRS)
+		for __val in $__value; do
+			__val=$WRKDIRPREFIX$PORTSDIR/$__val/work
+			__vals="$__vals${__vals:+ }$__val"
+		done
+		__value="$__vals"
+		;;
+	esac
+	putdebug 1 2 __value
+	case $__op in
+	plus)
+		eval echo \"\${$__key} $__value\"
+		;;
+	none)
+		echo "$__value"
+		;;
+	*)
+		error "'$__op' not allowed"
+		;;
+	esac
+}
+
+get-zfsfs()
+{
+	local	__dest_host					\
+		__dest_path					\
+		__function__=get-zfsfs				\
+		__mode						\
+		__root=false
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-r)
+			__root=true
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if echo $1 | egrep -q ':'; then
+		__dest_host=$(complete-hostform ${1%%:*})
+		__dest_path=${1#*:}
+		__mode=remote
+	else
+		__dest_path=$1
+		__mode=local
+	fi
+	putdebug 1 1 __dest_host __dest_path __mode __root
+	case $__mode in
+	local)
+		if $__root; then
+			mount | egrep -m1 $__dest_path | sed -Ee 's,^(.[^/]+).*$,\1,'
+		else
+			mount | egrep -m1 $__dest_path | cut -d ' ' -f 1
+		fi
+		 ;;
+	remote)
+		if $__root; then
+			putdebug 1 2 __dest_host __dest_path __mode __root
+			ssh -p $_ssh_port $__dest_host "mount | egrep -m1 $__dest_path | sed -Ee 's,^(.[^/]+).*$,\1,'"
+		else
+			ssh -p $_ssh_port $__dest_host "mount | egrep -m1 $__dest_path | cut -d ' ' -f 1"
+		fi
+		;;
+	esac
+}
+
+glob-csh()
+{
+	csh -c "echo $*" 2> /dev/null
+}
+
+is-domainame()
+{
+	echo "$1" | egrep -q '^([[:alnum:]_\-]+\.)+[[:alpha:]]+$' > /dev/null 2>&1
+}
+
+is-hostname()
+{
+	echo "$1" | egrep -q '^([[:alnum:]_\-]+\.)+[[:alnum:]_\-]+$' > /dev/null 2>&1
+}
+
+is-ipaddress()
+{
+	echo "$1" | egrep -q '^([0-9]+\.)+[0-9]+$' > /dev/null 2>&1
+}
+
+is-remote()
+{
+	local	__force_exec=false				\
+		__function__=is-remote
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-f)
+			__force_exec=true
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if $_is_remote_checked; then
+		if ! $_is_remote; then
+			if ! $__force_exec; then
+				error "not in remote but in local"
+			else
+				return 1
+			fi
+		else
+			return 0
+		fi
+	else
+		error "can't resolve destination"
+	fi
+}
+
+isalive-host()
+{
+	local	__function__=isalive-host			\
+		__host=$1
+	
+	if ping -qc1 $__host > /dev/null 2>&1; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+isalive-ssh()
+{
+	local	__function__=isalive-ssh			\
+		__host		\
+		__port=$_ssh_port
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			shift
+			__port=$1
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__host=$1
+	putdebug 1 0 _ssh_port
+	if nc -zw1 $__host $__port > /dev/null 2>&1; then
+		return 0
+	else
+		return 1
+	fi
+}
+
+include()
+{
+	local	__fs='[[:space:]]+'				\
+		__function__=include				\
+		__str
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-s)
+			shift
+			__fs="$1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__str="$1"
+	shift
+	echo "$__str" | awk -v strings="$*" -v sep="$__fs" "$_f_include_awk"
+}
+
+include-port()
+{
+	echo "$1" | awk "$_f_include_port_awk"
+}
+
+isinclude-lines()
+{
+	local	__file=$1					\
+		__function__=isinclude-lines			\
+		__lines
+
+	__lines=$(eval echo \"'${'$2'}'\")
+	__lines=$(echo "$__lines" | awk "$_f_lines_to_newlined_string_awk")
+	putdebug 1 0 __lines
+	awk -v lines="$__lines" "$_f_isinclude_lines_awk" $__file
+}
+
+issame-imagefile()
+{
+	local	__file						\
+		__function__=issame-imagefile			\
+		__image_file					\
+		__pimage_file=""
+
+	for __file in $*; do
+		if ! echo $__file | egrep -q ':'; then
+			return 1
+		fi
+		__image_file=${__file%%:*}
+		if [ -n "$__pimage_file" -a "$__image_file" != "$__pimage_file" ]; then
+			return 1
+		fi
+		__pimage_file=$__image_file
+	done
+}
+
+loadkm()
+{
+	local	__module=$1
+
+	if ! kldstat -qm $__module; then
+		runc kldload $__module
+	fi
+}
+
+localcmd()
+{
+	local	__function__=localcmd				\
+		__command=$1
+
+	if $_dry_run; then
+		putdebug 1 0 _commands_local __command
+		if echo "$_commands_local" | egrep -qe "/$__command$"; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+logrotate()
+{
+	local	__function__=logrotate				\
+		__install_options="-m $_logfile_mode"		\
+		__logdir					\
+		__logfile					\
+		__logfilename					\
+		__logfilesize					\
+		__logtmpdir=$LOGTMPDIR				\
+		__prog_name=$1
+
+	__logfilename=$(basename $_logfile)
+	__logdir=$(dirname $_logfile)
+	if [ ! -f $_logfile ]; then
+		touch $_logfile
+		chmod $_logfile_mode $_logfile
+		if [ -n "$_logfile_owner" ]; then
+			chown $_logfile_owner $_logfile
+		fi
+		(cd $__logdir; pax -r -w -l $__logfilename $__logtmpdir)
+	else
+		if [ ! -f $__logtmpdir/$__logfilename ]; then
+			(cd $__logdir; pax -r -w -l $__logfilename $__logtmpdir)
+		fi
+		if [ -n "$_logfile_owner" ]; then
+			__install_options="$__install_options -o ${_logfile_owner%%:*} -g ${_logfile_owner##*:}"
+		fi
+		__logfilesize=$(du -k $_logfile | awk '{printf "%d", $1}')
+		putdebug 1 0 _logfile __logfilesize _log_rotate_size
+		if [ $__logfilesize -gt $_log_rotate_size ]; then
+			install $__install_options $__logtmpdir/$__logfilename $_logfile.0
+			printf "%-20s%12s[%d]: logfile turned over due to size>%dK\n" "$(putime)" \
+				$__prog_name $$ $_log_rotate_size > $__logtmpdir/$__logfilename
+			frotate
+			$_logcommpresscmd $_logfile.0
+		fi
+	fi
+}
+
+mkdirs()
+{
+	local	__dest=$1					\
+		__ddir						\
+		__dir						\
+		__dirs_mkdir=''					\
+		__dirs_pax=''					\
+		__function__=mkdirs				\
+		__mkdir=false					\
+		__sdir						\
+		__src=$2
+
+	IFS='/'
+	putdebug 1 0 __src __dest
+	__sdirs=$(reverse -b "$__src")
+	__ddirs=$(reverse -b "$__dest")
+	unset IFS
+	__src="$__src/"
+	__dest="$__dest/"
+	__ddir=$__dest
+	putdebug 1 1 __sdirs
+	for __dir in $__ddirs; do
+		__sdir=${__sdirs%% *}
+		putdebug 1 2  __sdir __dir __ddir
+		if [ -d $__ddir ]; then
+			break
+		fi
+		if ! $__mkdir && [ "$__dir" = "$__sdir" ]; then
+			if [ -z "$__dirs_pax" ]; then
+				__dirs_pax=$__sdir
+			else
+				__dirs_pax="$__sdir $__dirs_pax"
+			fi
+			__sdirs=${__sdirs#$__sdir }
+		else
+			if [ -z "$__dirs_mkdir" ]; then
+				__dirs_mkdir=$__dir
+			else
+				__dirs_mkdir="$__dir/$__dirs_mkdir"
+			fi
+			__mkdir=true
+		fi
+		__ddir=${__dest%%/$__dir/*}
+	done
+	putdebug 1 3 __dirs_mkdir __dirs_pax
+	mkdir -p $__ddir/$__dirs_mkdir
+	for __dir in $__dirs_pax; do
+		__sdir=${__src%%/$__dir/*}
+		__ddir=${__dest%%/$__dir/*}
+		putdebug 1 4 __dir __sdir __ddir
+		(cd $__sdir; pax -r -w -d -p e $__dir $__ddir)
+	done
+}
+
+mkexfiles()
+{
+	local	__function__=mkexfiles
+
+	mktmpfile 1
+	putdebug 1 0 _tmpfiles
+	printf $(glob-csh $_exclude_patterns | \
+		sed -Ee 's|([^[:space:]]+)|.\1|g' -e 's|[[:space:]]+|\\n|g' -e 's/$/\\n/') \
+		> $_tmpfiles
+}
+
+mktmpfile()
+{
+	local	__function__=mktmpfile				\
+		__mode=default					\
+		__n=0						\
+		__nfiles=1					\
+		__tmpfile					\
+		__tmpfiles=""
+
+	while [ $# -gt 0 ] ; do
+		case $1 in
+		-p)
+			shift
+			_prefix_tmpfile=$1
+			;;
+		-s)
+			__mode=sequential
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	test -n "$1" && : $((__nfiles = $1))
+	while [ $__n -lt $__nfiles ]; do
+		__tmpfile=$(env TEMPDIR=$TEMPDIR mktemp -t $_prefix_tmpfile)
+		if [ $? -ne 0 ]; then
+			error "can't create temp file '$__tmpfile'"
+		fi
+		case $__mode in
+		sequential)
+			if [ $__n -eq 0 ]; then
+				eval $__tmpfilename=$__tmpfile
+			else
+				eval $__tmpfilename_$__n=$__tmpfile
+			fi
+			;;
+		esac
+		__tmpfiles="$__tmpfiles${__tmpfiles:+ }$__tmpfile"
+		: $((__n += 1))
+	done
+	_tmpfiles="$_tmpfiles${_tmpfiles:+ }$__tmpfiles"
+	_mktmpfiles=$__tmpfiles
+}
+
+mount-image()
+{
+	local	__dev						\
+		__function__=mount-image			\
+		__image_file					\
+		__image_file_slice				\
+		__mode=mount_root
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-r)
+			__mode=mount_root
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__image_file=$1
+	__dev=$(mdconfig -a -t vnode -f $__image_file)
+	if [ $? -gt 0 ]; then
+		error "attach '$__image_file' failed"
+	fi
+	case $__mode in
+	mount_root)
+		__image_file_slice=$(get-rootslice $__dev)
+		if [ $? -gt 0 ]; then
+			error "root slice not found"
+		fi
+		;;
+	esac
+	_mntdir=$(get-mntdir)
+	mkdir -p $_mntdir
+	if mount /dev/${__dev}p$__image_file_slice $_mntdir; then
+		_mntdirs="$_mntdirs${_mntdirs:+ }$_mntdir"
+	else
+		if [ "$_mntdir" != "$MNTDIR" ]; then
+			rmdir $_mntdir
+		fi
+		error "can't mount '/dev/${__dev}p$__image_file_slice'"
+	fi
+}
+
+msg()
+{
+	if [ -z "$ignore_msg" ]; then
+		echo "[$COMMAND_NAME:$__function__]:$1"
+	fi
+}
+
+need-logging()
+{
+	local	__function__=need-logging			\
+		__logging=$1
+
+	putdebug 1 0 _logging __logging
+	if ! $_logging && $__logging; then
+		_need_logging=true
+		return 0
+	else
+		_need_logging=false
+		return 1
+	fi
+}
+
+newlined()
+{
+	local	__function__=newlined				\
+		__get_lines=0
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-n)
+			__get_lines=1
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	putdebug 1 0 __get_lines
+	echo "$*" | awk -v get_lines=$__get_lines "$_f_lines_to_newlined_awk"
+}
+
+pop()
+{
+	local	__force_count=false				\
+		__function__=pop				\
+		__line						\
+		__line_name=""					\
+		__lines						\
+		__lines_name					\
+		__mode=normal					\
+		__n						\
+		__nname						\
+		__poped
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-t)
+			__mode=test
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if [ $# -lt 2 ]; then
+		__lines_name=$1
+	elif [ $# -lt 3 ]; then
+		__line_name=$1
+		__lines_name=$2
+	else
+		error "too more arguments"
+	fi
+	putdebug 1 0 __line_name __lines_name
+	__nname=_n_$__lines_name
+	case $__mode in
+	test)
+		eval __n='${'$__nname'}'
+		putdebug 1 1 __nname __n
+		case $__n in
+		"")
+			__lines=$(eval echo \"\${$__lines_name}\")
+			: $((__n = $(echo "$__lines" | wc -l)))
+			putdebug 1 2 __n
+			if [ $__n -lt 2 ]; then
+				__line=$(echo "$__lines" | head -1)
+				test -z "$__line" && return 1
+			fi
+			return 0
+			;;
+		[1-9]*)
+			putdebug 1 3 __n
+			return 0
+			;;
+		0)
+			putdebug 1 4 __n
+			eval $__nname=""
+			return 1
+			;;
+		*)
+			error "unknown value '$__n'"
+			;;
+		esac
+		;;
+	*)
+		__lines=$(eval echo \"\${$__lines_name}\")
+		: $((__n = $(echo "$__lines" | wc -l)))
+		__line=$(echo "$__lines" | head -1)
+		putdebug 1 5 __n __line
+		if [ $__n -lt 2 ]; then
+			if [ -n "$__lines" ]; then
+				if [ -n "$__line_name" ]; then
+					setvar $__line_name "$__line"
+				else
+					echo "$__line"
+				fi
+				eval $__nname=0
+			else
+				eval $__nname=""
+			fi
+			__poped=""
+		else
+			if [ -n "$__line_name" ]; then
+				setvar $__line_name "$__line"
+			else
+				echo "$__line"
+			fi
+			: $((__n -= 1))
+			eval $__nname=$__n
+			__poped=$(echo "$__lines" | sed -nEe '2,$p')
+		fi
+		putdebug 1 6 __n $__nname
+		setvar $__lines_name "$__poped"
+		;;
+	esac
+}
+
+popb()
+{
+	local	__end_line					\
+		__function__=popb				\
+		__poped_block					\
+		__start_line
+
+	__poped_block=$(eval echo \"'${'$1'}'\")
+	__start_line=$(echo "$__poped_block" | sed -nEe "/^[[:space:]]*$2/p" | head -1)
+	__end_line=$(echo "$__poped_block" | sed -nEe "/^[[:space:]]*$3/p" | head -1)
+	if echo "$__poped_block" | head -1 | egrep -q -e "^[[:space:]]*$2"; then
+		__poped_block=$(echo "$__poped_block" | sed -Ee "1d")
+	else
+		__poped_block=$(echo "$__poped_block" | sed -Ee "1,/^[[:space:]]*$2/d")
+	fi
+	__poped_block=$(echo "$__poped_block" | sed -Ee "/^[[:space:]]*$3/,$ d")
+	printf "%s\n%s\n%s\n" "$__start_line" "$__poped_block" "$__end_line"
+}
+
+popbed()
+{
+	local	__function__=popbed				\
+		__popbed_anchor='#@popbed:anchor'		\
+		__poped_block					\
+		__poped_block_head				\
+		__poped_block_tail
+
+	__poped_block=$(eval echo \"'${'$1'}'\")
+	if echo "$__poped_block" | head -1 | egrep -q -e "^[[:space:]]*$2"; then
+		__poped_block_head=""
+	else
+		__poped_block_head=$(echo "$__poped_block" | sed -nEe "1,/^[[:space:]]*$2/p" | \
+							sed -Ee "s/^[[:space:]]*$2.*$/$__popbed_anchor/")
+	fi
+	__poped_block_tail=$(echo "$__poped_block" | sed -nEe "/^[[:space:]]*$3/,$ p" | \
+						sed -Ee '1d')
+	printf "%s\n%s\n" "$__poped_block_head" "$__poped_block_tail" | \
+			sed -Ee "/^$__popbed_anchor$/d"
+}
+
+poped()
+{
+	eval echo \"\${$1}\" | sed -nEe '2,$p'
+}
+
+prepare-accounts()
+{
+	local	__destdir=$BACKUPDIR				\
+		__file						\
+		__function__=prepare-accounts			\
+		__mode=template					\
+		__remove_destdir=false
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-r)
+			__remove_destdir=true
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	template)
+		if $__remove_destdir; then
+			runc rm -rf $__destdir
+		fi
+		for __file in /etc/master.passwd /etc/group /usr/home/admin /root; do
+			copy -b -f -p $TEMPLATE_ACCOUNT_DIR$__file $__destdir$__file
+		done
+		;;
+	esac
+}
+
+push-port()
+{
+	local	__directive="$1"				\
+		__function__=push-port				\
+		__port=$2
+
+	putdebug 1 0 __directive __port
+	echo "$__directive" | awk -v port=$__port "$_f_push_port_awk"
+}
+
+putdebug()
+{
+	local	__location_no					\
+		__stop_mode=false				\
+		__var						\
+		__vars						\
+		__verb_mode=false
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-s)
+			__stop_mode=true
+			;;
+		-v)
+			__verb_mode=true
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	unset __vars __var
+	__specified_debug_level=$1; shift
+	__location_no=$1; shift
+	__vars="$*"
+	if check-debug -f $__function__; then
+		if [ $__specified_debug_level -eq $_debug_level ]; then
+			for __var in $__vars; do
+				if $__verb_mode; then
+					echo $__function__:$__location_no:$__var'===>' 1>&2
+					eval echo \"'${'$__var'}'\" 1>&2
+					echo '<==='$__function__:$__location_no:$__var 1>&2
+				else
+					echo "$__function__:$__location_no:$__var=$(eval echo '\"${'$__var'}\"')" 1>&2
+				fi
+			done
+			$__stop_mode && exit 1
+		fi
+	fi
+}
+
+putf()
+{
+	local	__function__=putf				\
+		__hline						\
+		__lines						\
+		__indent=""					\
+		__str						\
+		__trimmed=false					\
+		__width=62
+
+	while [ $# -gt 1 ] ; do
+		case $1 in
+		-i)
+			shift
+			__indent=$(printf "%${1}s\n" "")
+			;;
+		-t)
+			__trimmed=true
+			;;
+		-w)
+			shift
+			__width=$1
+			;;
+		esac
+		shift
+	done
+	$__trimmed && : $((__width -= 2))
+	__str="$1"
+	if $__trimmed; then
+		__hline="+$(echo `jot -b '-' $__width` | sed -e 's/ //g')+"
+		printf "%s%s\n"  "$__indent" "$__hline"
+		: $((__width -= 2))
+		putdebug 1 0 __str
+		__lines=$(echo "$__str" | fmt -sw $__width)
+		putdebug 1 1 __lines
+		echo "$__lines" | \
+		while read __line; do
+			printf "%s%-2s%-${__width}s%2s\n"  "$__indent" "|" "$__line" "|"
+		done
+		printf "%s%s\n"  "$__indent" "$__hline"
+	else
+		echo "$__str" | fmt -sw $__width | sed -Ee "s/^/$__indent/g"
+	fi
+}
+
+putreturn()
+{
+	local	__function__=putreturn				\
+		__srcs						\
+		__src
+
+	if echo "$*" | egrep -q -e '{|}'; then
+		__srcs="$(glob-csh \"$*\")"
+	else
+		__srcs="$*"
+	fi
+	set -- $__srcs
+	while [ $# -ge 1 ] ; do
+		__src=$1
+		putreturn1 $__src
+		shift
+	done
+}
+
+putreturn1()
+{
+	local	__function__=putreturn1				\
+		__src=$1					\
+		__src_basedir					\
+		__src_dirname
+
+	if [ -f $__src.bak ]; then
+		if [ -d $__src ]; then
+			warn "'$__src' is a directory. ignored"
+			return 1
+		fi
+		rm -rf $__src.org
+		echo -n '- '
+		mv -v $__src.bak $__src
+	elif [ -d $__src.bak ]; then
+		if [ -d $__src -o ! -e $__src ]; then
+			if [ -e $__src.org ]; then
+				rm -rf $__src.org
+			fi
+			rm -rf $__src
+			echo -n '- '
+			mv -v $__src.bak $__src
+		else
+			warn "'$__src' is a file. ignored"
+			return 1
+		fi
+	elif [ -f $__src.org ]; then
+		if [ -d $__src ]; then
+			warn "'$__src' is a directory. ignored"
+			return 1
+		fi
+		echo -n '- '
+		mv -v $__src.org $__src
+	elif [ -d $__src.org ]; then
+		if [ -d $__src -o ! -e $__src ]; then
+			rm -rf $__src
+			echo -n '- '
+			mv -v $__src.org $__src
+		else
+			warn "'$__src' is a file. ignored"
+			return 1
+		fi
+	fi
+}
+
+putime()
+{
+	local	__function__=putime				\
+		__hr						\
+		__key=$2					\
+		__min						\
+		__option=$1					\
+		__sec						\
+		__time_end					\
+		__time_int					\
+		__time_log_file					\
+		__time_now					\
+		__time_start
+
+	__key=$(echo "$2" | sed -Ee 's/[-.]/_/g')
+	__time_now=$(env LANG=C date)
+	case $__option in
+	-a)
+		conv-date-fmt "$__time_now" '%a %b %d %T %Z %Y' '%s'
+		;;
+	-e)
+		eval '_time_'$__key'_end'=$(conv-date-fmt "$__time_now" '%a %b %d %T %Z %Y' '%s')
+		;;
+	-i)
+		eval __time_start='${_time_'$__key'_start}'
+		eval __time_end='${_time_'$__key'_end}'
+		putdebug 1 0 __time_start	__time_end
+		: $((__time_int = __time_end - __time_start))
+		putdebug 1 1 __time_int
+		: $((__sec = __time_int % 60))
+		: $((__min = __time_int / 60 % 60))
+		: $((__hr  = __time_int / 60 / 60 % 60))
+		putdebug 1 2 __hr __min __sec
+		printf "%02d:%02d:%02d\n" $__hr $__min $__sec
+		;;
+	-s)
+		eval '_time_'$__key'_start'=$(conv-date-fmt "$__time_now" '%a %b %d %T %Z %Y' '%s')
+		;;
+	-S)
+		case $2 in
+		$dkgname)
+			__time_log_file=$DKGDBDIR/+TIME
+			;;
+		*)
+			__time_log_file=$DKGDBDIR/+TIME_$(echo $2|tr '[:lower:]' '[:upper:]')
+			;;
+		esac
+		eval echo \"\${_time_${__key}_start} \${_time_${__key}_end} $((_time_${__key}_end - _time_${__key}_start))\" > $__time_log_file
+		;;
+	-T)
+		__time_int=$2
+		: $((__sec = __time_int % 60))
+		: $((__min = __time_int / 60 % 60))
+		: $((__hr  = __time_int / 60 / 60 % 60))
+		printf "%02d:%02d:%02d\n" $__hr $__min $__sec
+		;;
+	*)
+		conv-date-fmt "$__time_now" '%a %b %d %T %Z %Y' '%Y.%m.%d %T'
+		;;
+	esac
+	putdebug 1 3 _time_pre_start _time_pre_end
+}
+
+quote()
+{
+	if echo "$1" | egrep -q -e '"'; then
+		printf "'%s'\n" $1
+	elif echo "$1" | egrep -q -e "'"; then
+		printf '"%s"\n' $1
+	else
+		printf "'%s'\n" $1
+	fi
+}
+
+quotize()
+{
+	if echo $1 | egrep -q -e '[[:space:]]+'; then
+		if echo "$1" | egrep -q -e '"'; then
+			echo "'$1'"
+		elif echo "$1" | egrep -q -e "'"; then
+			echo "\"$1\""
+		else
+			echo "\"$1\""
+		fi
+	else
+		echo "$1"
+	fi
+}
+
+reuse()
+{
+	local	__var
+
+	while [ $# -gt 0 ]; do
+		__var="__${1}__"
+		eval $1=\"'${__'$1'__}'\"
+		unset $__var
+		shift
+	done
+}
+
+reverse()
+{
+	local	__function__=reverse				\
+		__item						\
+		__items						\
+		__ritems=''					\
+		__sep						\
+		__separator
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b)
+			__separator=blank
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__items="$*"
+	putdebug 1 0 IFS __items
+	case $__separator in
+	blank)
+		__sep=' '
+		;;
+	*)
+		__sep=$IFS
+		;;
+	esac
+	for __item in $__items; do
+		if [ -z "$__ritems" ]; then
+			__ritems=$__item
+		else
+			__ritems="$__item$__sep$__ritems"
+		fi
+	done
+	echo "$__ritems"
+}
+
+rexec()
+{
+	local	__function__=rexec				\
+		__runc_args=""
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-f)
+			__runc_args="-f"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__env_cmd=${_ssh_envs:+"/usr/bin/env $_ssh_envs "}
+	putdebug 1 0 __env_cmd
+	runc $__runc_args ssh $_ssh_args \"$__env_cmd$1\"
+}
+
+rmio()
+{
+	local	__dest						\
+		__dests						\
+		__dir						\
+		__file						\
+		__files						\
+		__function__=rmio				\
+		__image_file					\
+		__mode=normal					\
+		__remove_dir=false				\
+		__vm_imagefile					\
+		__vm_name
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-r)
+			__remove_dir=true
+			;;
+		-v)
+			__mode=vm
+			shift
+			__vm_name=$1
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	vm)
+		if exists-vm -s $__vm_name; then
+			__vm_imagefile=$(get-vmimagepath $__vm_name)
+			__dests="$__vm_imagefile:$*"
+		fi
+		;;
+	*)
+		__dests="$(sortg $*)"
+		;;
+	esac
+	putdebug 1 0 __dests
+	if [ $(echo $__dests | awk '{print NF}') -lt 1 ]; then
+		error "remove file not specified"
+	fi
+	echo "$__dests" | \
+	while read __dest; do
+		__image_file=${__dest%%:*}
+		__files="${__dest#*:}"
+		putdebug 1 1 __image_file  __files
+		if mount-image $__image_file; then
+			for __file in $__files; do
+				putdebug 1 2 __file __remove_dir
+				if [ -d $_mntdir$__file ]; then
+					putdebug 1 3 __file __remove_dir
+					if $__remove_dir; then
+						runc rm -rf $_mntdir$__file
+					else
+						runc rm -rf $_mntdir$__file/\*
+					fi
+				else
+					putdebug 1 4 __file __remove_dir
+					runc rm -f $_mntdir$__file
+				fi
+			done
+			umount-image $__image_file
+		fi
+	done
+}
+
+rmtmpfile()
+{
+	local	__function__=rmtmpfile				\
+		__mode=default					\
+		__tmpfile
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			__mode=all
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	putdebug 1 1 _tmpfiles
+	case $__mode in
+	all)
+		test -n "$_tmpfiles" && rm -f $_tmpfiles
+		;;
+	*)
+		if [ -n "$*" ]; then
+			for __tmpfile in $*; do
+				if echo $_tmpfiles | egrep -qw $__tmpfile; then
+					rm -f $__tmpfile
+					_tmpfiles=$(echo $_tmpfiles | sed -Ee "s,[[:blank:]]*$__tmpfile,,")
+				else
+					warn "'$__tmpfile' not found in _tmpfiles"
+				fi
+			done
+		else
+			test -n "$_mktmpfiles" && rm -f $_mktmpfiles
+			putdebug 1 1 _mktmpfiles _tmpfiles
+			update-tmpfiles
+			putdebug 1 2 _mktmpfiles _tmpfiles
+		fi
+		;;
+	esac
+}
+
+rreplace()
+{
+	local	__function__=rreplace				\
+		__merged_file					\
+		__merged_lines					\
+		__merge_value					\
+		__merge_varname					\
+		__row						\
+		__sep=' '
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-s)
+			shift
+			__sep=$1
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__row="$1"; shift
+	__merged_file=$1
+	if [ ! -f $__merged_file ]; then
+		error "'$__merged_file' not found"
+	fi
+	__merged_lines=$(cat $__merged_file)
+	if [ -n "$__row" ]; then
+		__merge_varname=${__row%%$__sep*}
+		__merge_value=$(escape-char "${__row#*$__sep}")
+		if ! echo "$__merged_lines" | \
+				egrep -q -e "^$__merge_varname$__sep$__merge_value"; then
+			if echo "$__merged_lines" | \
+					egrep -q -e "^[[:space:]]*$__merge_varname$__sep"; then
+				__merged_lines=$(echo "$__merged_lines" | \
+								sed -Ee "s|^($__merge_varname$__sep).*$|\1$__merge_value|g")
+			else
+				__merged_lines=$(printf "%s\n%s\n" "$__merged_lines" "$__row")
+			fi
+			backup $__merged_file
+			echo "$__merged_lines" > $__merged_file
+			return 0
+		else
+			return 1
+		fi
+	else
+		return 1
+	fi
+}
+
+rtest()
+{
+	local	__function__=rtest
+
+	if ! $remotecopy; then
+		test $*
+	else
+		if ! $_sshalive; then
+			if ! isalive-host $remotehost > /dev/null 2>&1; then
+				error "'$remotehost' not alive"
+			elif ! isalive-ssh $_ssh_args_remotesite > /dev/null 2>&1; then
+				error "'ssh $_ssh_args_remotesite' failed"
+			fi
+			_sshalive=true
+		fi
+		ssh $_ssh_args_remotesite "test $*" > /dev/null 2>&1
+	fi
+}
+
+runc()
+{
+	local	__commandline					\
+		__force=$_force_execute				\
+		__function__=runc				\
+		__prompt					\
+		__rtcode					\
+		__trace=$_dry_run				\
+		__verbose=$_verbose_output
+
+	putdebug 1 0 __commandline
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-f)
+			__force=true
+			;;
+		-n)
+			__trace=true
+			;;
+		-v)
+			__verbose=true
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__commandline="$@"
+	if which-command -e ${__commandline%% *}; then
+		__prompt='#'
+	else
+		__prompt='*'
+	fi
+	putdebug 1 1 _dry_run __commandline
+	if $__trace; then
+		putdebug 1 2 __commandline
+		if $__force; then
+			eval $__commandline
+		else
+			evar "$__prompt $__commandline"
+		fi
+	else
+		if $__verbose; then
+			evar "$__prompt $__commandline"
+		fi
+		eval $__commandline
+	fi
+	__rtcode=$?
+	return $__rtcode
+}
+
+running()
+{
+	local	__dkgname					\
+		__function__=running
+
+	case $1 in
+	start)
+		shift
+		case $1 in
+		-l)
+			shift
+			if [ $# -lt 1 ]; then
+				error "'dkgname' not specified"
+			fi
+			__dkgname=$1
+			putdebug 1 0 __dkgname DKGDBDIR
+			doing -l $__dkgname &
+			sleep 1
+			;;
+		*)
+			doing "$1" &
+			;;
+		esac
+		_doing_proc_id=$!
+		putdebug 1 2 _doing_proc_id
+		;;
+	stop)
+		putdebug 1 4 _doing_proc_id
+		kill -6 $_doing_proc_id
+		sleep 1
+		;;
+	esac
+}
+
+sct()
+{
+	local	__dest_host					\
+		__dest_path					\
+		__dest_rootdir					\
+		__destfstype					\
+		__extract_args=""				\
+		__first_create=false				\
+		__force_execute=false				\
+		__function__=sct				\
+		__src_path					\
+		__zfsrootfs
+
+	while [ $# -gt 0 ] ; do
+		case $1 in
+		-f)
+			__force_execute=true
+			;;
+		-i)
+			__first_create=true
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__src_path=$1
+	if [ ! -d $__src_path ]; then
+		error "'$__src_path' not found"
+	fi
+	__dest_host=$(complete-hostform ${2%%:*})
+	__dest_path=${2#*:}
+	__dest_rootdir=$(echo $__dest_path | sed -Ee 's|^(/[^/]+).*$|\1|')
+	if ssh -p $_ssh_port $__dest_host "test ! -d $__dest_rootdir"; then
+		error "'$__dest_rootdir' not found"
+	fi
+	putdebug 1 1 __src_path __dest_host __dest_rootdir __dest_path
+	__destfstype=$(get-fstype $__dest_host:$__dest_rootdir)
+	putdebug 1 2 __destfstype
+	if $__force_execute; then
+		_force_execute=true
+	fi
+	case $__destfstype in
+	zfs)
+		__zfsrootfs=$(get-zfsfs -r $__dest_host:$__dest_rootdir)
+		putdebug 1 3 __zfsrootfs __dest_path
+		runc ssh -p $_ssh_port $__dest_host \"zfs create -p $__zfsrootfs$__dest_path\"
+		;;
+	ufs|nfs)
+		runc ssh -p $_ssh_port $__dest_host \"mkdir -p $__dest_path\"
+		;;
+	*)
+		error "irregular filesystem type:'$__destfstype'"
+		;;
+	esac
+	putdebug 1 4 _tmpfiles
+	if [ -n "$_exclude_patterns" ]; then
+		mkexfiles
+		__extract_args=--exclude-from=$_tmpfiles
+	fi
+	if $__first_create; then
+		runc tar -cf - $__extract_args -C $__src_path . \| ssh -p $_ssh_port $__dest_host \"tar -vxpf - -C $__dest_path\"
+	else
+		runc tar -cf - --newer-mtime=\"$_latest_update\" $__extract_args \
+				-C $__src_path . \| ssh -p $_ssh_port $__dest_host \"tar -vxpf - -C $__dest_path\"
+	fi
+	test -n "$_exclude_patterns" && rmtmpfile
+	putdebug 1 5 _tmpfiles
+}
+
+set-sshport()
+{
+	local	__function__=set-sshport			\
+		__host=$1
+
+	if echo $__host | egrep -q '@'; then
+		__host=${__host#*@}
+	fi
+	if ! is-hostname $__host; then
+		putdebug 1 1 __host
+		if exist-sshport $__host; then
+			_ssh_port=$(get-sshport $__host)
+			putdebug 1 2 _ssh_port
+		fi
+	fi
+}
+
+setap()
+{
+	local	__function__=setap				\
+		__mode						\
+		__path
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-p)
+			__mode=parent
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__path=$1
+	if echo $__path | egrep -qe '^/'; then
+	elif echo $__path | egrep -qe '^\./'; then
+		__path="$(pwd)/${__path#./}"
+	elif echo $__path | egrep -qe '^\.\./'; then
+		__path="$(dirname `pwd`)/${__path#../}"
+	elif echo $__path | egrep -qe '^~'; then
+		__path=$(echo $__path)
+	else
+		__path="$(pwd)/$__path"
+	fi
+	case $__mode in
+	parent)
+		dirname $__path
+		;;
+	*)
+		echo $__path
+		;;
+	esac
+}
+
+setup-breakings()
+{
+	trap "proc-interrupt" 2
+	trap "proc-exit" EXIT
+}
+
+setup-logging()
+{
+	local	__function__=setup-logging			\
+		__log_rotate
+
+	putdebug 1 0 LOGDIR _log_rotate
+	putdebug -v 1 1 _log_rotate
+	_batch_mode=true
+	mkdir -p $LOGDIR $LOGTMPDIR
+	eval __log_rotate="\"$_log_rotate\""
+	putdebug -v 1 1 __log_rotate
+	set -- $(echo "$__log_rotate" | egrep -e '^/')
+	case $# in
+	8)
+		_logfile=$1
+		_logfile_owner=$2
+		_logfile_mode=$3
+		: $((_log_rotate_count = $4))
+		: $((_log_rotate_size = $5))
+		_log_rotate_when=$6
+		_logfile_sufx=$(get-loginfo -s $7)
+		_logcommpresscmd=$(get-loginfo -c $7)
+		: $((_log_rotate_interval = $8 * 60))
+		;;
+	7)
+		_logfile=$1
+		_logfile_mode=$2
+		: $((_log_rotate_count = $3))
+		: $((_log_rotate_size = $4))
+		_log_rotate_when=$5
+		_logfile_sufx=$(get-loginfo -s $6)
+		_logcommpresscmd=$(get-loginfo -c $6)
+		: $((_log_rotate_interval = $7 * 60))
+		;;
+	*)
+		error "wrong logrotate specifiation"
+		;;
+	esac
+}
+
+sortp()
+{
+	eval echo \"\${$1}\" | awk '{printf("%d:%s\n", split($0, a, /\//), $0)}' | \
+		sort -nr | sed -Ee 's/^[[:digit:]]+://g'
+}
+
+sortg()
+{
+	echo -e $(glob-csh $* | sed -Ee 's/[[:space:]]+/\\n/g') | sort | uniq | awk "$_f_sortg_awk"
+}
+
+splice()
+{
+	local	__key						\
+		__function__=splice				\
+		__newline=0					\
+		__str_lines					\
+		__str_add_lines
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b)
+			__newline=1
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__key="$1"
+	__str_lines=$(eval echo \"'${'$2'}'\")
+	__str_add_lines=$(eval echo \"'${'$3'}'\")
+	__str_add_lines=$(echo "$__str_add_lines" | awk "$_f_lines_to_newlined_string_awk")
+	echo "$__str_lines" | awk -v newline=$__newline -v key="$__key" -v lines="$__str_add_lines" "$_f_splice_awk"
+}
+
+start-logging()
+{
+	local	__dkgname=$1					\
+		__function__=start-logging
+
+	if ! $_need_logging; then
+		_logging_now=false
+		return 0
+	fi
+	logrotate $__dkgname
+	running start -l $__dkgname
+	_logging_now=true
+	putdebug 1 0 _logfile
+	exec >> $_logfile 2>&1
+}
+
+stop-logging()
+{
+	! $_logging_now && return 0
+	running stop
+	_logging_now=false
+}
+
+stremb()
+{
+	local	__char='\='					\
+		__function__=stremb				\
+		__left=3					\
+		__width=72
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-w)
+			shift
+			__width=$1
+			;;
+		-h)
+			shift
+			__left=$1
+			;;
+		-c)
+			shift
+			__char="$1"
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	echo "$1" | awk -v width=$__width -v left=$__left -v char="$__char" "$_f_stremb_awk"
+}
+
+toupper()
+{
+	local	__function__=toupper				\
+		__mode=nonexistent
+
+	while [ $# -gt 0 ] ; do
+		case $1 in
+		-n)
+			__mode=name
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	name)
+		echo "$*" | tr '[:lower:]' '[:upper:]' | sed -Ee 's/-/_/g' -e 's/\./_/'
+		;;
+	*)
+		echo "$*" | tr '[:lower:]' '[:upper:]'
+		;;
+	esac
+}
+
+umount-image()
+{
+	local	__dev						\
+		__devf						\
+		__function__=umount-image			\
+		__image_file					\
+		__mntdir					\
+		__mntdirs					\
+		__mode=single					\
+		__reconstitute=false
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-a)
+			__mode=all
+			;;
+		-r)
+			__reconstitute=true
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	case $__mode in
+	all)
+		__mntdirs=$(get-rmntdirs)
+		if [ -z "$__mntdirs" ]; then
+			msg "no mount files"
+			return 0
+		fi
+		for __mntdir in $__mntdirs; do
+			__devf=$(mount | awk -v mntdir=$__mntdir '$3 == mntdir {print $1}')
+			__dev=$(mdconfig -lv | awk -v dev=$__devf 'dev ~ "^/dev/" $1 {print $1}')
+			if [ -z "$__dev" ]; then
+				error "image file not attatched to '$__devf'"
+			fi
+			__image_file=$(mdconfig -lv | awk -v dev=$__dev '$1 == dev {print $4}')
+			if umount -f $__mntdir; then
+				sleep 1
+				if [ "$__mntdir" != "$MNTDIR" ]; then
+					rmdir $__mntdir
+				fi
+				if mdconfig -d -u $__dev; then
+					if $__reconstitute; then
+						putreturn $__image_file
+					fi
+				else
+					error "detatch '$__dev' failed"
+				fi
+			else
+				error "'umount -f $__mntdir' failed"
+			fi
+		done
+		;;
+	*)
+		__image_file=$1
+		__dev=$(mdconfig -lv | awk -v file="$__image_file" '$4 == file {print $1}')
+		if [ -z "$__dev" ]; then
+			error "'$__image_file' not attatched"
+		fi
+		if [ -z "$_mntdir" ]; then
+			error "'/dev/$__dev' not mounted"
+		fi
+		__mntdir=$(mount | awk -v dev="$__dev" '$1 ~ "^/dev/" dev {print $3}')
+		if [ "$__mntdir" != "$_mntdir" ]; then
+			error "'$__mntdir' and '$_mntdir'  not matched"
+		fi
+		if umount -f $_mntdir; then
+			sleep 1
+			if [ "$_mntdir" != "$MNTDIR" ]; then
+				rmdir $_mntdir
+			fi
+			_mntdirs=$(echo "$_mntdirs" | awk -v items="$_mntdir" "$_f_exclude_items_awk")
+			_mntdir=""
+			if ! mdconfig -d -u $__dev; then
+				error "detatch '$__dev' failed"
+			fi
+		else
+			error "'umount -f $_mntdir' failed"
+		fi
+		;;
+	esac
+}
+
+unuse()
+{
+	while [ $# -gt 0 ]; do
+		eval __${1}__=\"'${'$1'}'\"
+		eval unset $1
+		shift
+	done
+}
+
+update-tmpfiles()
+{
+	_tmpfiles=$(echo "$_tmpfiles" | awk -v items="$_mktmpfiles" "$_f_exclude_items_awk")
+}
+
+warn()
+{
+	if [ -z "$ignore_warn" ]; then
+		echo 1>&2 "warn[$COMMAND_NAME:$__function__]: $1"
+	fi
+}
+
+warror()
+{
+	if $_dry_run; then
+		warn "$*"
+		return 1
+	else
+		error "$*"
+	fi
+}
+
+which-command()
+{
+	local	__command					\
+		__function__=which-command			\
+		__optiotn=''
+
+	case $1 in
+	-*)
+		__option=$1
+		shift
+		;;
+	esac
+	__command=$1
+	if check-command $__command; then
+		__class='command'
+	elif command -V $__command 2> /dev/null | egrep -q -e 'shell builtin'; then
+		__class='builtin'
+	elif echo "$_special_shell_functions" | egrep -q -w -e $__command; then
+		__class='sfunction'
+	elif command -V $__command 2> /dev/null | egrep -q -e 'shell function'; then
+		__class='function'
+	else
+		error "'$__command' not found"
+	fi
+	putdebug 1 0 __command __class
+	case $__option in
+	-c)
+		case $__class in
+		command)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+		esac
+		;;
+	-e)
+		case $__class in
+		command|builtin)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+		esac
+		;;
+	-n)
+		case $__class in
+		command|builtin|sfunction)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+		esac
+		;;
+	esac
+}
+
+
+fi # [ -z "$_subc_loaded" ]
+
+_subc_loaded=:

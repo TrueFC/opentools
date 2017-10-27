@@ -1,0 +1,16 @@
+# $FreeBSD$
+
+PORTNAME=	%%PORTNAME%%
+PORTVERSION=	%%PORTVERSION%%
+CATEGORIES=	%%CATEGORY%% xepkgs
+MASTER_SITES=	XEP
+
+MAINTAINER=	xemacs@FreeBSD.org
+COMMENT=	%%COMMENT%%
+
+LICENSE=	GPLv2
+
+USE_XEPKGS=	yes
+NO_ARCH=	yes
+
+.include <bsd.port.mk>

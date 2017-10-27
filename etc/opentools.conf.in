@@ -1,0 +1,25 @@
+#########################################################################
+###                                                                   ###
+###    Global setting for OpenTools scripts                           ###
+###                                                                   ###
+#########################################################################
+
+## Root directory of OpenTools.
+## Normally:/usr/local/opentools
+OPENTOOLSDIR=%%OPENTOOLSDIR%%
+
+## Where OpenTools include files exist.
+## Default:${OPENTOOLSDIR}/include
+#OPENTOOLSINCDIR=%%OPENTOOLSINCDIR%%
+
+## Where functions which use in OpenTools scripts exist.
+## Default:${OPENTOOLSDIR}/lib
+#OPENTOOLSLIBDIR=%%OPENTOOLSLIBDIR%%
+
+## Where template data which use in OpenTools scripts exist.
+## Default:${OPENTOOLSDIR}/data
+#TEMPLATEDIR=%%TEMPLATEDIR%%
+
+## Where OpenTools scripts install.
+## Normally:/usr/local/bin, Default:${OPENTOOLSDIR}/bin
+OPENTOOLSBINDIR=%%OPENTOOLSBINDIR%%
