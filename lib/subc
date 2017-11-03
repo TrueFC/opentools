@@ -47,6 +47,21 @@ END {
 	print str
 }'
 
+_f_check_digit_awk='
+BEGIN {
+	digit = ""
+}
+{
+	if ($0 ~ /^[0-9]+$/) {
+		digit = "digit"
+	} else {
+		digit = "unknown"
+	}
+}
+END {
+	print digit
+}'
+
 _f_exclude_items_awk='
 BEGIN {
 	results = ""
@@ -153,6 +168,23 @@ BEGIN {
 END {
 	print rootslice
 	exit ! found
+}'
+
+_f_get_runcommands_awk='
+BEGIN {
+	command_list = ""
+}
+{
+	sub(/^[[:space:]]*/, "")
+	sub(/[[:space:]]*$/, "")
+	if ($0) {
+		gsub(/(,|[[:space:]]+)/, ";")
+		sub(/$/, ";")
+		command_list = $0
+	}
+}
+END {
+	print command_list
 }'
 
 _f_get_spece_nkey_awk='
@@ -996,6 +1028,35 @@ check-debug()
 		fi
 		;;
 	esac
+}
+
+check-digit()
+{
+	local	__function__=check-digit
+
+	echo "$1" | awk "$_f_check_digit_awk"
+}
+
+check-host()
+{
+	local	__function__=check-host				\
+		__host						\
+		__hostname
+
+	if [ $# -lt 1 ]; then
+		error "hostname must be specifiled"
+	elif [ $# -lt 2 ]; then
+		__host=$1
+	else
+		error "too more arguments"
+	fi
+	__hostname=$(hostname)
+	if [ "$__host" = "$__hostname" ]; then
+		_is_remote=false
+	else
+		_is_remote=true
+	fi
+	_is_remote_checked=true
 }
 
 check-pathname()
@@ -2263,6 +2324,58 @@ get-copyfiles()
 	check-copyfiles -a "$__dirs" $__srcs
 }
 
+get-commandargs()
+{
+	local	__function__=get-elisps
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-E)
+			__mode=emacs
+			;;
+		-e)
+			__option='-eval'
+			;;
+		-r)
+			__option='-xrm'
+			;;
+		-T)
+			__mode=xterm
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__list="$1"
+	case $__mode in
+	emacs)
+		case $__option in
+		-eval|-xrm)
+			echo -e "$__list" | sed -Ee "s/^(.*)$/$__option '\1'/"
+			;;
+		*)
+			error "'$__option' is not for emacs"
+			;;
+		esac
+		;;
+	xterm)
+		case $__option in
+		-xrm)
+			echo -e "$__list" | sed -Ee "s/^(.*)$/$__option '\1'/"
+			;;
+		*)
+			error "'$__option' is not for emacs"
+			;;
+		esac
+		;;
+	esac
+}
+
 get-fstype()
 {
 	local	__dest_host					\
@@ -2523,6 +2636,13 @@ get-rmntdirs()
 get-rootslice()
 {
 	gpart show $1 | awk "$_f_get_rootslice_awk"
+}
+
+get-runcommands()
+{
+	local	__function__=get-runcommands
+
+	echo "$1" | awk "$_f_get_runcommands_awk"
 }
 
 get-space()
