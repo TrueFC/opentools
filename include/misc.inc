@@ -31,11 +31,24 @@ VERSION_BWR=1.0
 VERSION_SBACKUP=1.0
 VERSION_SLGN=1.0
 VERSION_W3=1.0
+VERSION_WL=1.0
 VERSION_XEMCS=1.0
 VERSION_XTRM=1.0
 eval VERSION=\${VERSION_$(echo $PROGRAM_NAME | tr '-' '_' | tr "[[:lower:]]" "[[:upper:]]")}
 	
 : ${DESTDIR:=/hosts/$HOST}
+: ${EMACS_CMD:=xemacs}
+: ${EMACS_TTY_ARGS:='-nw -no-site-file'}
+: ${EMACS_WL_ARGS:='-f prom-wl'}
+: ${EMACS_TTY_WL_ARGS:='-nw -no-site-file -f wl'}
+: ${EMACS_BACKGROUND_PIXMAP:=$OPENTOOLSDATADIR/images/Firebird-Kingdom.xpm}
+: ${EMACS_FOREGROUND_COLOR:=White}
+: ${EMACS_BACKGROUND_COLOR:=Black}
+: ${EMACS_BACKGROUND_DEFAULT:=${EMACS_BACKGROUND_PIXMAP}}
+: ${EMACS_PRE_RUN_COMMANDS:=mailprc}
+: ${EMACS_FILL_COLUMN:=60}
+: ${XTERM_FOREGROUND_COLOR:=Black}
+: ${XTERM_BACKGROUND_COLOR:=White}
 
 : ${_backuphostport:=22}
 : ${_exclude_patterns:=${EXCLUDE_PATTERNS:='/{current,tmp,dev,compat,var/{tmp,mail},home/*/{.opera/cache,.cache}}'}}
