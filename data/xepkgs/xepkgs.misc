@@ -1,0 +1,436 @@
+misc:\
+	1.0:\
+	editors:\
+	Meta port for miscellaneous XEmacs pacakges
+Sun:\
+	1.16:\
+	misc:\
+	Support for Sparcworks
+ada:\
+	1.14:\
+	lang:\
+	Ada language support
+apel:\
+	1.37:\
+	editors:\
+	A Portable Emacs Library used by XEmacs MIME support
+auctex:\
+	1.51:\
+	textproc:\
+	Basic TeX/LaTeX support
+bbdb:\
+	1.32:\
+	database:\
+	The Big Brother Data Base
+build:\
+	1.15:\
+	editors:\
+	Build XEmacs from within UNIX or Windows
+calc:\
+	1.26:\
+	math:\
+	Emacs calculator
+calendar:\
+	1.38:\
+	misc:\
+	Calendar and diary support
+cedet-common:\
+	1.01:\
+	misc:\
+	Common files for CEDET development environment
+clearcase:\
+	1.10:\
+	devel:\
+	New Clearcase Version Control for XEmacs (UNIX, Windows)
+cogre:\
+	1.02:\
+	graphics:\
+	Graph editing mode
+cookie:\
+	1.15:\
+	misc:\
+	Spook and Yow (Zippy quotes)
+crisp:\
+	1.15:\
+	emulators:\
+	Crisp/Brief emulation
+dictionary:\
+	1.16:\
+	misc:\
+	Interface to RFC2229 dictionary servers
+docbookide:\
+	0.08:\
+	textproc:\
+	DocBook editing support
+easypg:\
+	1.03:\
+	security:\
+	GnuPG interface for Emacs
+ecb:\
+	1.22:\
+	www:\
+	Emacs source code browser
+ecrypto:\
+	0.21:\
+	security:\
+	Crypto functionality in Emacs Lisp
+ede:\
+	1.03:\
+	devel:\
+	Emacs Development Environment
+ediff:\
+	1.81:\
+	editors:\
+	Interface over GNU patch
+edt:\
+	1.14:\
+	emulators:\
+	DEC EDIT/EDT emulation
+eieio:\
+	1.07:\
+	editors:\
+	Enhanced Implementation of Emacs Interpreted Objects
+elib:\
+	1.13:\
+	lang:\
+	Portable Emacs Lisp utilities library
+emerge:\
+	1.11:\
+	editors:\
+	Another interface over GNU patch
+erc:\
+	0.23:\
+	irc:\
+	ERC is an Emacs InternetRelayChat client
+escreen:\
+	1.01:\
+	editors:\
+	Multiple editing sessions within a single frame (like screen)
+eshell:\
+	1.18:\
+	editors:\
+	Command shell implemented entirely in Emacs Lisp
+eterm:\
+	1.18:\
+	emulators:\
+	Terminal emulation
+eudc:\
+	1.40:\
+	misc:\
+	Emacs Unified Directory Client (LDAP, PH)
+flim:\
+	1.10:\
+	editors:\
+	Faithful Library about Internet Message
+footnote:\
+	1.16:\
+	mail:\
+	Footnoting in mail message editing modes
+forms:\
+	1.15:\
+	editors:\
+	Forms editing support (obsolete, use Widget instead)
+fortran-modes:\
+	1.05:\
+	lang:\
+	Fortran support
+frame-icon:\
+	1.11:\
+	editors:\
+	Set up mode-specific icons for each frame under XEmacs
+games:\
+	1.20:\
+	games:\
+	Tetris, Sokoban, and Snake
+general-docs:\
+	1.06:\
+	misc:\
+	General XEmacs documentation
+gnats:\
+	1.17:\
+	devel:\
+	XEmacs bug reports
+gnus:\
+	1.94:\
+	news:\
+	The Gnus Newsreader and Mailreader
+guided-tour:\
+	0.52:\
+	misc:\
+	Phil Sung's Guided Tour of Emacs
+haskell-mode:\
+	1.11:\
+	lang:\
+	Haskell editing support
+hm--html-menus:\
+	1.24:\
+	www:\
+	HTML editing
+hyperbole:\
+	1.17:\
+	misc:\
+	The Everyday Info Manager
+ibuffer:\
+	1.10:\
+	editors:\
+	Advanced replacement for buffer-menu
+idlwave:\
+	1.32:\
+	editors:\
+	Editing and Shell mode for the Interactive Data Language
+igrep:\
+	1.16:\
+	editors:\
+	Enhanced front-end for Grep
+ilisp:\
+	1.36:\
+	editors:\
+	Front-end for Inferior Lisp
+ispell:\
+	1.32:\
+	misc:\
+	Spell-checking with GNU ispell
+jde:\
+	1.52:\
+	java:\
+	Integrated Development Environment for Java
+mailcrypt:\
+	2.14:\
+	security:\
+	Support for messaging encryption with PGP
+mercurial:\
+	1.10:\
+	devel:\
+	Support for the Mercurial distributed SCM
+mew:\
+	1.19:\
+	mail:\
+	Messaging in an Emacs World
+mh-e:\
+	1.32:\
+	mail:\
+	The XEmacs Interface to the MH Mail System
+mine:\
+	1.16:\
+	games:\
+	Minehunt Game
+misc-games:\
+	1.22:\
+	games:\
+	Other amusements and diversions
+mmm-mode:\
+	1.05:\
+	editors:\
+	Multiple major modes in a single buffer
+ocaml:\
+	0.06:\
+	lang:\
+	Objective Caml editing support
+oo-browser:\
+	1.05:\
+	www:\
+	The Multi-Language Object-Oriented Code Browser
+pc:\
+	1.28:\
+	emulators:\
+	PC style interface emulation
+pcl-cvs:\
+	1.70:\
+	devel:\
+	CVS frontend
+pcomplete:\
+	1.06:\
+	editors:\
+	Provides programmatic completion
+perl-modes:\
+	1.14:\
+	lang:\
+	Perl support
+pgg:\
+	1.07:\
+	security:\
+	Emacs interface to various PGP implementations
+ps-print:\
+	1.12:\
+	print:\
+	Printing functions and utilities
+psgml-dtds:\
+	1.03:\
+	textproc:\
+	Deprecated collection of DTDs for psgml
+psgml:\
+	1.45:\
+	textproc:\
+	Validated HTML/SGML editing
+python-modes:\
+	1.14:\
+	lang:\
+	Python support
+re-builder:\
+	1.05:\
+	devel:\
+	Interactive development tool for regular expressions
+reftex:\
+	1.34:\
+	textproc:\
+	Emacs support for LaTeX cross-references, citations..
+riece:\
+	1.23:\
+	irc:\
+	IRC (Internet Relay Chat) client for Emacs
+rmail:\
+	1.14:\
+	mail:\
+	An obsolete Emacs mailer
+ruby-modes:\
+	1.04:\
+	lang:\
+	Ruby support
+sasl:\
+	1.16:\
+	security:\
+	Simple Authentication and Security Layer (SASL) library
+scheme:\
+	1.18:\
+	lang:\
+	Front-end support for Inferior Scheme
+sdoc-mode:\
+	1.10:\
+	textproc:\
+	SmartDoc mode
+semantic:\
+	1.21:\
+	lang:\
+	Semantic bovinator (Yacc/Lex for XEmacs) includes Senator
+semi:\
+	1.10:\
+	editors:\
+	Secure Emacs MIME Interface
+sgml:\
+	1.11:\
+	textproc:\
+	SGML/Linuxdoc-SGML editing
+sh-script:\
+	1.24:\
+	lang:\
+	Support for editing shell scripts
+sieve:\
+	1.18:\
+	mail:\
+	Manage Sieve email filtering scripts
+slider:\
+	1.16:\
+	editors:\
+	User interface tool
+sml-mode:\
+	0.12:\
+	editors:\
+	SML editing support
+sounds-au:\
+	1.12:\
+	audio:\
+	XEmacs Sun sound files
+sounds-wav:\
+	1.12:\
+	audio:\
+	XEmacs Microsoft sound files
+speedbar:\
+	1.29:\
+	editors:\
+	Provides a separate frame with convenient references
+strokes:\
+	1.10:\
+	misc:\
+	Mouse enhancement utility
+supercite:\
+	1.21:\
+	mail:\
+	An Emacs citation tool for News and Mail messages
+texinfo:\
+	1.30:\
+	textproc:\
+	XEmacs TeXinfo support
+textools:\
+	1.15:\
+	textproc:\
+	Miscellaneous support for editing text files
+tm:\
+	1.39:\
+	editors:\
+	Emacs MIME support not needed for gnus >= 5.8.0
+tooltalk:\
+	1.15:\
+	misc:\
+	Support for building with Tooltalk
+tpu:\
+	1.14:\
+	editors:\
+	DEC EDIT/TPU support
+tramp:\
+	1.40:\
+	net:\
+	Remote shell-based file editing
+vc-cc:\
+	1.22:\
+	devel:\
+	Version Control for ClearCase (UnFree) systems
+vc:\
+	1.48:\
+	devel:\
+	Version Control for Free systems
+vhdl:\
+	1.22:\
+	misc:\
+	Support for VHDL
+view-process:\
+	1.13:\
+	www:\
+	A Unix process browsing tool
+viper:\
+	1.67:\
+	emulators:\
+	VI emulation support
+vm:\
+	8.08:\
+	mail:\
+	An Emacs mailer
+w3:\
+	1.35:\
+	www:\
+	A Web browser
+w3m:\
+	1.10:\
+	www:\
+	An Emacs interface to w3m
+wl:\
+	1.10:\
+	mail:\
+	Yet Another Message Interface on Emacsen
+x-symbol:\
+	1.11:\
+	textproc:\
+	Semi WYSIWYG for LaTeX, HTML, etc, using additional fonts
+xetla:\
+	1.02:\
+	editors:\
+	(S)XEmacs Frontend to GNU/arch (tla)
+xlib:\
+	1.14:\
+	x11:\
+	Emacs interface to X server
+xslide:\
+	1.09:\
+	textproc:\
+	XSL editing support
+xslt-process:\
+	1.12:\
+	textproc:\
+	XSLT processing support
+xwem:\
+	1.23:\
+	x11-wm:\
+	X Emacs Window Manager
+zenirc:\
+	1.16:\
+	irc:\
+	ZENIRC IRC Client

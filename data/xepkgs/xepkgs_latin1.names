@@ -1,0 +1,15 @@
+c-support
+cc-mode
+debug
+dired
+edit-utils
+efs
+fsf-compat
+mail-lib
+net-utils
+os-utils
+prog-modes
+text-modes
+time
+xemacs-base
+xemacs-devel
