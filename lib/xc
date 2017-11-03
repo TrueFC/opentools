@@ -61,6 +61,30 @@ END {
 	exit ! found
 }'
 
+_f_check_color_awk='
+BEGIN {
+	color = ""
+}
+{
+	if ($0 ~ /^[[:alpha:]]+[[:digit:]]*$/) {
+		color = "color"
+	} else if ($0 ~ /\.([jJ][pP][eE]?[gG]|[pP][nN][gG]|[gG][iI][fF]|[xX][pP][mM])$/) {
+		color = "image"
+	} else {
+		color = "unknown"
+	}
+}
+END {
+	print color
+}'
+
+check-color()
+{
+	local	__function__=check-color
+
+	echo "$1" | awk "$_f_check_color_awk"
+}
+
 check-env()
 {
 	local	__function__=check-env				\
@@ -141,6 +165,9 @@ get-windowdecoration()
 		w3m)
 			__application_name="W3M"
 			;;
+		wl)
+			__application_name="Wanderlust"
+			;;
 		xterm)
 			__application_name="XTerm$_window_position_abbrev"
 			;;
@@ -160,6 +187,9 @@ get-windowdecoration()
 			;;
 		w3m)
 			__title="W3M: $__username@$__hostname"
+			;;
+		wl)
+			__title="Wanderlust: $__hostname"
 			;;
 		xterm)
 			__title="XTerm: $_window_position_name: $__username@$__hostname"
@@ -243,6 +273,26 @@ get-windowgeometry()
 			;;
 		esac
 		;;
+	wl)
+		case $_window_position in
+		LeftTop)
+			case $__window_size in
+			800x600)	__geometry='82x29+0+64'		;;
+			1024x600)	__geometry='117x35+0+0'		;;
+			1024x768)	__geometry='83x30+0+64'		;;
+			1280x800)	__geometry='86x33+0+64'		;;
+			1280x1024)	__geometry='86x40+0+132'	;;
+			1600x1200)	__geometry='126x64-64-0'	;;
+			*)
+				error "window size '$__window_size' not allowed"
+				;;
+			esac
+			;;
+		*)
+			error "window position '$_window_position' not allowed"
+			;;
+		esac
+		;;
 	xterm|slgn)
 		case $_window_position in
 		LeftTop)
@@ -287,6 +337,153 @@ get-windowsize()
 	local	__function__=get-windowsize
 
 	xwininfo -root | awk "$_f_get_windowsize_awk"
+}
+
+set-resources()
+{
+	local	__background_color=""				\
+		__default_color=""				\
+		__foreground_color=""				\
+		__mode						\
+		__resources=""					\
+		__resources_var_name				\
+		__function__=set-resources
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-b)
+			shift
+			__background_color=$1
+			;;
+		-E)
+			__mode=emacs
+			;;
+		-f)
+			shift
+			__foreground_color=$1
+			;;
+		-T)
+			__mode=xterm
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__resources_var_name=$1
+	case $__mode in
+	emacs)
+		if is-remote -f; then
+			__resource_name='XTerm*background'
+			__default_color=$background_xterm_color
+		else
+			__default_color=$background_emacs_color
+			case $(check-color $__default_color) in
+			color)
+				__resource_name='Emacs*EmacsFrame.default.attributeBackground'
+				__resources="$__resource_name:$__default_color"
+				;;
+			image)
+				if ! is-remote -f; then
+					__resource_name='Emacs*EmacsFrame.default.attributeBackgroundPixmap'
+					if [ -f $__default_color ]; then
+						__resources="$__resource_name:$__default_color"
+					else
+						error "'$__default_color' not found"
+					fi
+				else
+					__resources="$__resource_name:$__default_color"
+				fi
+				;;
+			*)
+				error "'$__default_color' not color name or image"
+				;;
+			esac
+		fi		
+		if [ -n "$__background_color" ]; then
+			case $(check-color $__background_color) in
+			color)
+				__resource_name='Emacs*EmacsFrame.default.attributeBackground'
+				__resources="$__resource_name:$__background_color"
+				;;
+			image)
+				if ! is-remote -f; then
+					__resource_name='Emacs*EmacsFrame.default.attributeBackgroundPixmap'
+					if [ -f $__background_color ]; then
+						__resources="$__resource_name:$__background_color"
+					else
+						error "'$__background_color' not found"
+					fi
+				else
+					__resources="$__resource_name:$__default_color"
+				fi
+				;;
+			*)
+				error "'$__background_color' not color name or image"
+				;;
+			esac
+		else
+			__resources="$__resource_name:$__default_color"
+		fi
+		if is-remote -f; then
+			__resource_name='XTerm*foreground'
+			__default_color=$foreground_xterm_color
+		else
+			__resource_name='Emacs*EmacsFrame.default.attributeForeground'
+			__default_color=$foreground_emacs_color
+		fi		
+		if [ -n "$__foreground_color" ]; then
+			case $(check-color $__foreground_color) in
+			color)
+				__resources="$__resources${__resources:+\n}$__resource_name:$__foreground_color"
+				;;
+			*)
+				error "'$__foreground_color' not color name"
+				;;
+			esac
+		else
+			__resources="$__resources${__resources:+\n}$__resource_name:$__default_color"
+		fi
+		if is-remote -f; then
+			__resources=$(get-commandargs -T -r "$__resources")
+		else
+			__resources=$(get-commandargs -E -r "$__resources")
+		fi
+		;;
+	xterm)
+		if [ -n "$__background_color" ]; then
+			case $(check-color $__background_color) in
+			color)
+				__resource_name='XTerm*background'
+				__resources="$__resource_name:$__background_color"
+				;;
+			*)
+				error "'$__background_color' not color name"
+				;;
+			esac
+		fi
+		if [ -n "$__foreground_color" ]; then
+			case $(check-color $__foreground_color) in
+			color)
+				__resource_name='XTerm*foreground'
+				__resources="$__resources${__resources:+\n}$__resource_name:$__foreground_color"
+				;;
+			*)
+				error "'$__foreground_color' not color name"
+				;;
+			esac
+		fi
+		__resources=$(get-commandargs -T -r "$__resources")
+		;;
+	*)
+		error "mode:'$__mode' unknown"
+		;;
+	esac
+	setvar $__resources_var_name "$__resources"
 }
 
 set-windowposition()
