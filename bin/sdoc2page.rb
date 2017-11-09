@@ -1,4 +1,4 @@
-#!/usr/bin/env -S ruby ${RUBY_ARGS} -I${OPENTOOLSDIR}/include
+#!/usr/bin/env -S OPENTOOLSDIR=%%OPENTOOLSDIR%% ruby %%RUBY_ARGS%% -I%%OPENTOOLSDIR%%/include
 #
 # Copyright (c) 2013 Kazuhiko Kiriyama <kiri@OpenEdu.org>
 # All rights reserved.
@@ -33,9 +33,11 @@ require "sdoc.inc"
 def main(argv)
   parser = GetoptLong.new
   parser.set_options ['--dry-run',              '-n', GetoptLong::NO_ARGUMENT],
+                     ['--force-https',          '-s', GetoptLong::NO_ARGUMENT],
                      ['--leap-day',             '-L', GetoptLong::NO_ARGUMENT],
                      ['--long-help',  '--help',       GetoptLong::NO_ARGUMENT],
-                     ['--short-help',           '-h', GetoptLong::NO_ARGUMENT]
+                     ['--short-help',           '-h', GetoptLong::NO_ARGUMENT],
+                     ['--template-file',        '-t', GetoptLong::REQUIRED_ARGUMENT]
   begin
     parser.each_option do |name, arg|
       eval "$#{name.sub(/^--/, '').gsub(/-/, '_').downcase} = '#{arg}'"
@@ -51,6 +53,7 @@ def main(argv)
   when :leap_day
     template = readfile $templatefile, :string
     src      = readfile $srcfile, :string
+    src.gsub! %r|http://|m, "https://" if $force_https
     src.gsub! /\A.*?\n(<h\d+ .*?)\n<div class=\"navigatorbottom\">\n.*?\z/m, "\\1"
     src.gsub! /\n(<div class=\"titletoc\">\n.*?)\n<\/div>/m, ""
     dest     = []
@@ -88,7 +91,11 @@ def initialization()
   end
   case $page_type
   when :leap_day
-    $templatefile = OPENTOOLSTMPLDIR + '/github/pages/LeapDay.html'
+    if $template_file
+      $templatefile = $template_file 
+    else
+      $templatefile = OPENTOOLSTMPLDIR + '/github/pages/LeapDay.html'
+    end
   else
     error "Unknown page type: \`#{$page_type.to_s}'"
   end
@@ -97,22 +104,25 @@ end
 def usage()
   if $short_help
     $stderr.print <<-EOF
-Usage: #{COMMAND_NAME} [-Lhn] file file
+Usage: #{COMMAND_NAME} [-Lhns] file file
     EOF
   elsif $long_help
     $stderr.print <<-EOF
 OpenTools #{PROGRAM_NAME} #{$version}, a GitHub page generator from SmartDoc html.
 
-Usage: #{COMMAND_NAME} [-Lhn] file file
-   2 files must be specified. 1st one is SmartDoc's compiled html file
-   to be included in GitHub pages, 2nd one is GitHub page html file 
-   to which convert with type by specified option that is -L for 
-   \`Lead Day'.
+Usage: #{COMMAND_NAME} [-Lhns] file file
+   2 files must be specified. 1st one is SmartDoc's compiled html file to be
+   included in GitHub pages, 2nd one is GitHub page html file to which convert
+   with type by specified option that is -L for \`Lead Day'.
 
 Options:
-  -h,  --help         print this help
-  -n,  --dry-run      do not actually run, just report the steps
-  -L,  --leap-day     set GitHub template page \`Lead Day'
+  -h,--help            Print this help.
+  -n,--dry-run         Do not actually run, just report the steps.
+  -L,--leap-day        Set GitHub template page \`Lead Day'.
+  -s,--force-https     Force enable to https connection.
+  -t,--template-file <template file>
+                       Use <template file> for GitHub page.
+                       Default: /usr/local/opentools/Templates/github/pages/*
     EOF
   end
   exit 0

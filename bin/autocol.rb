@@ -1,4 +1,4 @@
-#!/usr/bin/env -S ruby ${RUBY_ARGS} -I${OPENTOOLSDIR}/include
+#!/usr/bin/env -S OPENTOOLSDIR=%%OPENTOOLSDIR%% ruby %%RUBY_ARGS%% -I%%OPENTOOLSDIR%%/include
 #
 # Copyright (c) 2013 Kazuhiko Kiriyama <kiri@OpenEdu.org>
 # All rights reserved.

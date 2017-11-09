@@ -2,6 +2,7 @@ OPENTOOLSBINS?=	autocol.rb		\
 		bwsr.sh			\
 		clone-xepkgs.sh		\
 		create-portstree.sh	\
+		emcs.sh			\
 		get-xepkgdata.sh	\
 		latex2latex.rb		\
 		mailprc.sh		\
@@ -13,10 +14,31 @@ OPENTOOLSBINS?=	autocol.rb		\
 		slgn.sh			\
 		w3.sh			\
 		wl.sh			\
-		xemcs.sh		\
 		xtrm.sh
-SCRIPTS=	${OPENTOOLSBINS}
+SCRIPTS=	${OPENTOOLSBINS:R}
 DESTDIR?=	${LOCALBASE}
 SCRIPTSDIR=	/bin
+
+LOCALBASE?=	/usr/local
+RUBY_SCRIPTS=	${OPENTOOLSBINS:M*.rb}
+RUBY_ARGS?=	-Ku
+SH_SCRIPTS=	${OPENTOOLSBINS:M*.sh}
+
+clean:
+	rm -f ${SCRIPTS}
+
+beforeinstall:
+	mkdir -p ${DESTDIR}${SCRIPTSDIR}
+
+.for __src in ${RUBY_SCRIPTS}
+${__src:R}: ${__src}
+	sed -E  -e 's,%%OPENTOOLSDIR%%,${DESTDIR}/opentools,g' \
+		-e 's,%%RUBY_ARGS%%,${RUBY_ARGS},g' ${.ALLSRC} > ${.TARGET}
+.endfor
+.for __src in ${SH_SCRIPTS}
+${__src:R}: ${__src}
+	sed -E  -e 's@^(\.[[:space:]]+).*(/common.inc)$$@\1\$${OPENTOOLSDIR:=${DESTDIR}/opentools}/include\2@' \
+		${.ALLSRC} > ${.TARGET}
+.endfor
 
 .include <bsd.prog.mk>

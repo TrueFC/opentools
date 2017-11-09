@@ -30,10 +30,11 @@
 COMMAND_NAME=$(basename $0 .sh)
 PROGRAM_NAME=$(echo "$COMMAND_NAME" | awk '{print toupper(substr($0, 1, 1))substr($0, 2, length($0))}')
 
+OPENTOOLSETCDIR=${OPENTOOLSDIR%/opentools}/etc
 if [ -f /etc/opentools.conf ]; then
 . /etc/opentools.conf
-elif [ -f /usr/local/etc/opentools.conf ]; then
-. /usr/local/etc/opentools.conf
+elif [ -f ${OPENTOOLSETCDIR}/opentools.conf ]; then
+. ${OPENTOOLSETCDIR}/opentools.conf
 fi
 : ${OPENTOOLSINCDIR:=$OPENTOOLSDIR/include}
 : ${OPENTOOLSBINDIR:=$OPENTOOLSDIR/bin}

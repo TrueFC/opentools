@@ -28,10 +28,12 @@
 COMMAND_NAME    = File.basename($0, '.rb')
 PROGRAM_NAME    = COMMAND_NAME[0].upcase + COMMAND_NAME[1..-1]
 
+OPENTOOLSETCDIR = ENV['OPENTOOLSDIR'].sub(%r|/opentools$|, '/etc')
+OPENTOOLSCONF   = OPENTOOLSETCDIR + '/opentools.conf'
 if File.exist?('/etc/opentools.conf')
   load '/etc/opentools.conf'
-elsif File.exist?('/usr/local/etc/opentools.conf')
-  load '/usr/local/etc/opentools.conf'
+elsif File.exist?(OPENTOOLSCONF)
+  load OPENTOOLSCONF
 end
 OPENTOOLSDIR    ||= ENV['OPENTOOLSDIR']     ? ENV['OPENTOOLSDIR']     : '..'
 OPENTOOLSLIBDIR ||= ENV['OPENTOOLSLIBDIR']  ? ENV['OPENTOOLSLIBDIR']  : OPENTOOLSDIR + '/lib'
