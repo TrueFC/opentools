@@ -42,6 +42,24 @@ main()
 
 	while [ $# -gt 0 ] ; do
 		case $1 in
+		-b|--background-color*)
+			option=$1
+			case $option in
+			-b)
+				shift
+				case $1 in -*) error "need value for $option" ;; esac
+				background_color=$1
+				;;
+			--background-color=*)
+				background_color=${option#*=}
+				;;
+			--background-color)
+				shift
+				case $1 in -*) error "need value for $option" ;; esac
+				background_color=$1
+				;;
+			esac
+			;;
 		-d|--debug-mode=*)
 			option=$1
 			case $option in
@@ -78,6 +96,24 @@ main()
 		--debug-functions=*)
 			_debug_functions="${1#*=}"
 			;;
+		-f|--foreground-color*)
+			option=$1
+			case $option in
+			-f)
+				shift
+				case $1 in -*) error "need value for $option" ;; esac
+				foreground_color=$1
+				;;
+			--foreground-color=*)
+				foreground_color=${option#*=}
+				;;
+			--foreground-color)
+				shift
+				case $1 in -*) error "need value for $option" ;; esac
+				foreground_color=$1
+				;;
+			esac
+			;;
 		-h)
 			usage -s
 			;;
@@ -88,7 +124,7 @@ main()
 			_dry_run=true
 			;;
 		-[a-zA-Z]*)
-			options=$(echo "$1" | expand-options "hn" "d")
+			options=$(echo "$1" | expand-options "hn" "bdf")
 			if [ $? -gt 0 ]; then
 				error "illegal option '$options'"
 			fi
@@ -108,15 +144,16 @@ main()
 
 	initialize "$@"
 
-	window_geometry=$(get-windowgeometry xemacs)
+	window_geometry=$(get-windowgeometry $EMACS_CMD)
 	putdebug 1 0 window_geometry
-	application_name=$(get-windowdecoration -a xemacs)
+	application_name=$(get-windowdecoration -a $EMACS_CMD)
 	putdebug 1 1 application_name
-	window_title=$(get-windowdecoration -t xemacs)
+	window_title=$(get-windowdecoration -t $EMACS_CMD)
 	putdebug 1 2 window_title
-	runc xemacs     -name \"$application_name\" \
-			-T \"$window_title\" \
-			-geometry $window_geometry \&
+	runc $EMACS_CMD -name \"$application_name\"		\
+			-T \"$window_title\"			\
+			-geometry $window_geometry		\
+			$resources_args \&
 
 	finalize
 
@@ -125,6 +162,10 @@ main()
 
 globalize()
 {
+	background_color=""
+	background_emacs_color=$EMACS_BACKGROUND_DEFAULT
+	foreground_color=""
+	foreground_emacs_color=$EMACS_FOREGROUND_COLOR
 	position=RT
 }
 
@@ -134,6 +175,7 @@ initialize()
 
 	check-debug
 	! check-env -w && error "not in X-window"
+	set-resources -E -l -b "$background_color" -f "$foreground_color" resources_args
 	set-windowposition $position
 }
 
@@ -146,27 +188,35 @@ usage()
 	case $1 in
 	-s)
 		cat <<- EOF
-		Usage: $COMMAND_NAME [-hn] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [--help]
+		Usage: $COMMAND_NAME [-hn] [-b <bg color>] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-f <fg color>] [--help]
 		EOF
 		;;
 	-l)
 		cat <<- EOF
-		OpenTools $PROGRAM_NAME $VERSION, run XEmacs at right top location.
+		OpenTools $PROGRAM_NAME $VERSION, run $EMACS_NAME at right top location.
 		
-		Usage: $COMMAND_NAME [-hn] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [--help]
-		  Run XEmacs at left top location. Window size is chosen aoutomatically.
+		Usage: $COMMAND_NAME [-hn] [-b <bg color>] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-f <fg color>] [--help]
+		  Run $EMACS_NAME at left top location. Window size is chosen aoutomatically.
 
 		Options:
+		  -b,--background-color=<bg color>
+		                Set backgroud color to <bg color>. If <bg color> is a image
+		                file, backgroud color set to the image file.
+		  -d,--debug-mode=<debug mode>
+		                Debugging with <debug mode>. <debug mode> is a digit or
+		                'module'. If <debug mode> is 'module',<debug level)=1.
+		  --debug-commands=<debug commands>
+		                If <debug mode> is 'module', debug only on <debug commands>.
+		                Default:<debug commands>=DEBUG_COMMANDS.
+		  --debug-functions=<debug functions>
+		                If <debug mode> is 'module', debug only on <debug functions> of
+		                <debug commands>.
+		                Default:<debug functions>=DEBUG_FUNCTIONS
+		  -f,--foreground-color=<bg color>
+		                Set foregroud color to <fg color>.
 		  -h            Print short usage
-		     --help     Print long usage(this help)
+		  --help        Print long usage(this help)
 		  -n,--dry-run  Do not execute but show commands  
-		  -d,--debug-mode=<debug mode> Debugging with <debug mode>. <debug mode>=number or
-		                'module'. if 'module',<debug level)=1.
-		  --debug-commands=<debug commands> If <debug mode>='module', debug only on
-		                <debug commands>. Default <debug commands>=DEBUG_COMMANDS.
-		  --debug-functions=<debug functions> If <debug mode>='module', debug only on
-		                <debug functions> of <debug commands>.
-		                Default <debug functions>=DEBUG_FUNCTIONS
 		EOF
 		;;
 	esac
