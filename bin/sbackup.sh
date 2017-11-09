@@ -228,46 +228,46 @@ usage()
 	case $1 in
 	-s)
 		cat <<- EOF
-		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r dir] [--help] path host:path
-		       $COMMAND_NAME -a [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r dir] [--help] path host[:path]
-		       $COMMAND_NAME -R key:day [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r dir] [--help] path host[:path]
+		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>:<dest path>
+		       $COMMAND_NAME -a [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
+		       $COMMAND_NAME -R <key>:<day> [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
 		EOF
 		;;
 	-l)
 		cat <<- EOF
 		OpenTools $PROGRAM_NAME $VERSION, a local directory tree to remote site backuper.
 
-		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r dir] [--help] path host:path
-		       $COMMAND_NAME -a [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r dir] [--help] path host[:path]
-		       $COMMAND_NAME -R key:day [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r dir] [--help] path host[:path]
+		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>:<dest path>
+		       $COMMAND_NAME -a [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
+		       $COMMAND_NAME -R <key>:<day> [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
 
 		Common:
-		  -h                           print short usage
-		       --help                  print long usage(this help)
-		  -d,  --debug-mode=<debug mode>
-		                               debugging with <debug mode>. <debug mode>=number or
-					       'module'. if 'module' <debug level)=1, number
-					       <debug level)=number.
+		  -d,--debug-mode=<debug mode>
+		                Debugging with <debug mode>. <debug mode> is a digit or
+		                'module'. If <debug mode> is 'module',<debug level)=1.
 		  --debug-commands=<debug commands>
-		                               if <debug mode>='module', debug only on <debug commands>.
-		                               default <debug commands>=DEBUG_COMMANDS
+		                If <debug mode> is 'module', debug only on <debug commands>.
+		                Default:<debug commands>=DEBUG_COMMANDS.
 		  --debug-functions=<debug functions>
-		                               if <debug mode>='module', debug only on <debug functions>
-		                               of <debug commands>. 
-					       default <debug functions>=DEBUG_FUNCTIONS
-		  -n,  --dry-run               do not execute but show commands
-		  -r,  --backup-rootdir=dir    root directory on backup site. dir should be
-		                               the absolute path name. all fies save under
-		                               dir/host
+		                If <debug mode> is 'module', debug only on <debug functions> of
+		                <debug commands>.
+		                Default:<debug functions>=DEBUG_FUNCTIONS
+		  -h            Print short usage
+		  --help        Print long usage(this help)
+		  -n,--dry-run  Do not execute but show commands  
+		  -r,--backup-rootdir=<dir>
+		                Root directory on backup site. <dir> should be the absolute path
+				name. All fies save under <dir>/<dest host>
 
 		Auto backup mode:
-		  -a,  --auto-backup           automatic backup by periodic daily, weekly,
-		                               monthly and yearly.
+		  -a,--auto-backup
+		                Automatic backup by periodic daily, weekly, monthly and yearly.
 
 		Reduction mode:
-		  -R key:day,                  force reduce datastore with key at day.
-		    --force-reduction=key:day  key={week,month,year} and day is a yyyymmdd form
-		                               to which reduce all days before the day.
+		  -R,--force-reduction=<key>:<day>
+                                Force reduce datastore with key at day. <key>={week,month,year}
+		                and <day> is a yyyymmdd form to which reduce all days before the
+				day.
 		EOF
 		;;
 	esac

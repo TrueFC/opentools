@@ -207,16 +207,21 @@ usage()
 		  Slogin to <dest host> on xterm.
 
 		Options:
-		  -b,--background-color=<bg color> Set backgroud color to <bg color>. If
-		                <bg color> is a image file, backgroud color set to the image file.
-		  -d,--debug-mode=<debug mode> Debugging with <debug mode>. <debug mode>=number or
-		                'module'. if 'module',<debug level)=1.
-		  --debug-commands=<debug commands> If <debug mode>='module', debug only on
-		                <debug commands>. Default <debug commands>=DEBUG_COMMANDS.
-		  --debug-functions=<debug functions> If <debug mode>='module', debug only on
-		                <debug functions> of <debug commands>.
-		                Default <debug functions>=DEBUG_FUNCTIONS
-		  -f,--foreground-color=<bg color> Set foregroud color to <fg color>.
+		  -b,--background-color=<bg color>
+		                Set backgroud color to <bg color>. If <bg color> is a image
+		                file, backgroud color set to the image file.
+		  -d,--debug-mode=<debug mode>
+		                Debugging with <debug mode>. <debug mode> is a digit or
+		                'module'. If <debug mode> is 'module',<debug level)=1.
+		  --debug-commands=<debug commands>
+		                If <debug mode> is 'module', debug only on <debug commands>.
+		                Default:<debug commands>=DEBUG_COMMANDS.
+		  --debug-functions=<debug functions>
+		                If <debug mode> is 'module', debug only on <debug functions> of
+		                <debug commands>.
+		                Default:<debug functions>=DEBUG_FUNCTIONS
+		  -f,--foreground-color=<bg color>
+		                Set foregroud color to <fg color>.
 		  -h            Print short usage
 		  --help        Print long usage(this help)
 		  -n,--dry-run  Do not execute but show commands  

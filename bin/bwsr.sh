@@ -28,7 +28,7 @@
 #
 
 . ${OPENTOOLSINCDIR:=${OPENTOOLSDIR:=..}/include}/common.inc
-. ${OPENTOOLSINCDIR:=${OPENTOOLSDIR:=..}/include}/misc.inc
+. ${OPENTOOLSINCDIR}/misc.inc
 
 . $OPENTOOLSLIBDIR/subc
 . $OPENTOOLSLIBDIR/xc
@@ -185,18 +185,22 @@ usage()
 		  like 'f' for 'firefox' or 'c' for 'chrome'.
 
 		Options:
-		  -d,--debug-mode=<debug mode> Debugging with <debug mode>. <debug mode>=number or
-		                'module'. if 'module',<debug level)=1.
-		  --debug-commands=<debug commands> If <debug mode>='module', debug only on
-		                <debug commands>. Default <debug commands>=DEBUG_COMMANDS.
-		  --debug-functions=<debug functions> If <debug mode>='module', debug only on
-		                <debug functions> of <debug commands>.
-		                Default <debug functions>=DEBUG_FUNCTIONS
+		  -d,--debug-mode=<debug mode>
+		                Debugging with <debug mode>. <debug mode> is a digit or
+		                'module'. If <debug mode> is 'module',<debug level)=1.
+		  --debug-commands=<debug commands>
+		                If <debug mode> is 'module', debug only on <debug commands>.
+		                Default:<debug commands>=DEBUG_COMMANDS.
+		  --debug-functions=<debug functions>
+		                If <debug mode> is 'module', debug only on <debug functions> of
+		                <debug commands>.
+		                Default:<debug functions>=DEBUG_FUNCTIONS
 		  -h            Print short usage
-		     --help     Print long usage(this help)
+		  --help        Print long usage(this help)
 		  -n,--dry-run  Do not execute but show commands  
-		  -L,--locale=<locale> Locale for browser with 2 letters like 'ja' for
-		                Japanese. Default is 'ja'.
+		  -L,--locale=<locale>
+		                Locale for browser with 2 letters like 'ja' for Japanese.
+		                Default is 'ja'.
 		EOF
 		;;
 	esac

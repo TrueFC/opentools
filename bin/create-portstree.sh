@@ -207,36 +207,34 @@ usage()
 	case $1 in
 	-s)
 		cat <<- EOF
-		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-t dir] [--help] path [path]
+		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-t <dir>] [--help] <src path> [<dest path>]
 		EOF
 		;;
 	-l)
 		cat <<- EOF
 		OpenTools $PROGRAM_NAME $VERSION, cretare specific ports tree clone.
 		
-		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-t dir] [--help] path [path]
-		  path is the specific ports tree prefix which say PORTSDIR in
-		  bsd.port.mk. If two paths specifed, the first is the original and
-		  the second is the new one where only specific ports were prepared
-		  to be created.
+		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-t <dir>] [--help] <src path> [<dest path>]
+		  <src path> is the specific ports tree prefix which say PORTSDIR in
+		  bsd.port.mk. If <dest path> specifed, the <src path> is the original and
+		  <dest path> the new one where only specific ports were prepared to be created.
 		
 		Options:
-		  -h                           print short usage
-		       --help                  print long usage(this help)
-		  -d,  --debug-mode=<debug mode>
-		                               debugging with <debug mode>. <debug mode>=number or
-					       'module'. if 'module' <debug level)=1, number
-					       <debug level)=number.
+		  -d,--debug-mode=<debug mode>
+		                Debugging with <debug mode>. <debug mode> is a digit or
+		                'module'. If <debug mode> is 'module',<debug level)=1.
 		  --debug-commands=<debug commands>
-		                               if <debug mode>='module', debug only on <debug commands>.
-		                               default <debug commands>=DEBUG_COMMANDS
+		                If <debug mode> is 'module', debug only on <debug commands>.
+		                Default:<debug commands>=DEBUG_COMMANDS.
 		  --debug-functions=<debug functions>
-		                               if <debug mode>='module', debug only on <debug functions>
-		                               of <debug commands>. 
-					       default <debug functions>=DEBUG_FUNCTIONS
-		  -n,  --dry-run               do not execute but show commands
-		  -t,  --target-portsdir=dir   user target ports directory with "dir"
-		                               instead of PORTSDIR
+		                If <debug mode> is 'module', debug only on <debug functions> of
+		                <debug commands>.
+		                Default:<debug functions>=DEBUG_FUNCTIONS
+		  -h            Print short usage
+		  --help        Print long usage(this help)
+		  -n,--dry-run  Do not execute but show commands  
+		  -t,--target-portsdir=<dir>
+		                user target ports directory with <dir> instead of PORTSDIR
 		EOF
 		;;
 	esac

@@ -274,38 +274,39 @@ usage()
 	case $1 in
 	-s)
 		cat <<- EOF
-		Usage: $COMMAND_NAME [-hnv] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p protocol] [-u user] [--help] [host]
+		Usage: $COMMAND_NAME [-hnv] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p <protocol>] [-u <user>] [--help] [<host>]
 		EOF
 		;;
 	-l)
 		cat <<- EOF
 		OpenTools $PROGRAM_NAME $VERSION, a mail fetch and deliver to folders program(MDA).
 		
-		Usage: $COMMAND_NAME [-hnv] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p protocol] [-u user] [--help] [host]
-		  Fetch mails from user of POP server host by specified protpcol and
-		  deliver to respective folder described in \"procmailrc\". Mail fetchs by
-		  imget and delivery by procmail. 
+		Usage: $COMMAND_NAME [-hnv] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p <protocol>] [-u <user>] [--help] [<host>]
+		  Fetch mails from <user> of mail server <host> by specified <protpcol> and
+		  deliver to respective folder described in 'procmailrc'. Mail fetchs by imget
+		  and delivery by procmail. 
 		
 		Options:
-		  -h                           print short usage
-		       --help                  print long usage(this help)
-		  -n,  --dry-run               do not execute but show commands
-		  -d,  --debug-mode=<debug mode>
-		                               debugging with <debug mode>. <debug mode>=number or
-					       'module'. if 'module' <debug level)=1, number
-					       <debug level)=number.
+		  -d,--debug-mode=<debug mode>
+		                Debugging with <debug mode>. <debug mode> is a digit or
+		                'module'. If <debug mode> is 'module',<debug level)=1.
 		  --debug-commands=<debug commands>
-		                               if <debug mode>='module', debug only on <debug commands>.
-		                               default <debug commands>=DEBUG_COMMANDS
+		                If <debug mode> is 'module', debug only on <debug commands>.
+		                Default:<debug commands>=DEBUG_COMMANDS.
 		  --debug-functions=<debug functions>
-		                               if <debug mode>='module', debug only on <debug functions>
-		                               of <debug commands>. 
-					       default <debug functions>=DEBUG_FUNCTIONS
-		  -p,  --protocol=protocol     protocol for POP or IMAP. each protocol should 
-		                               be specified by \"local[:mailbox|:maildir]\" or
-		                               \"pop[/APOP|/RPOP|/POP]\"
-		  -u,  --user=user             user belong to POP server host
-		  -v,  --verbose-output        running with verbose output
+		                If <debug mode> is 'module', debug only on <debug functions> of
+		                <debug commands>.
+		                Default:<debug functions>=DEBUG_FUNCTIONS
+		  -h            Print short usage
+		  --help        Print long usage(this help)
+		  -n,--dry-run  Do not execute but show commands  
+		  -p,--protocol=<protocol>
+		                <protocol> for POP or IMAP. each <protocol> should be specified
+		                by 'local[:mailbox|:maildir]' or 'pop[/APOP|/RPOP|/POP]'
+		  -u,--user=<user>
+		                <user> belong to POP server <host>
+		  -v,--verbose-output
+		                running with verbose output
 		EOF
 		;;
 	esac

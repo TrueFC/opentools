@@ -165,35 +165,37 @@ usage()
 	case $1 in
 	-s)
 		cat <<- EOF
-		Usage: $COMMAND_NAME [-fhn] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p port] [-r dir] [--help] path host[:path]
+		Usage: $COMMAND_NAME [-fhn] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p <port>] [-r <dir>] [--help] <path> <host>[:<path>]
 		EOF
 		;;
 	-l)
 		cat <<- EOF
 		OpenTools $PROGRAM_NAME $VERSION, a local directory tree to remote site copy tool.
 
-		Usage: $COMMAND_NAME [-fhn] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p port] [-r dir] [--help] path host[:path]
+		Usage: $COMMAND_NAME [-fhn] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p <port>] [-r <dir>] [--help] <path> <host>[:<path>]
 
-		  -h                           print short usage
-		       --help                  print long usage(this help)
-		  -d,  --debug-mode=<debug mode>
-		                               debugging with <debug mode>. <debug mode>=number or
-					       'module'. if 'module' <debug level)=1, number
-					       <debug level)=number.
+		  -d,--debug-mode=<debug mode>
+		                Debugging with <debug mode>. <debug mode> is a digit or
+		                'module'. If <debug mode> is 'module',<debug level)=1.
 		  --debug-commands=<debug commands>
-		                               if <debug mode>='module', debug only on <debug commands>.
-		                               default <debug commands>=DEBUG_COMMANDS
+		                If <debug mode> is 'module', debug only on <debug commands>.
+		                Default:<debug commands>=DEBUG_COMMANDS.
 		  --debug-functions=<debug functions>
-		                               if <debug mode>='module', debug only on <debug functions>
-		                               of <debug commands>. 
-					       default <debug functions>=DEBUG_FUNCTIONS
-		  -f,  --force-execute         force to copy
-		  -i,  --first-create          first create
-		  -n,  --dry-run               do not execute but show commands
-		  -p,  --dest-host-port=port   host ssh port number
-		  -r,  --backup-rootdir=dir    root directory on backup site. dir should be
-		                               the absolute path name. all fies save under
-		                               dir/host
+		                If <debug mode> is 'module', debug only on <debug functions> of
+		                <debug commands>.
+		                Default:<debug functions>=DEBUG_FUNCTIONS
+		  -h            Print short usage
+		  --help        Print long usage(this help)
+		  -n,--dry-run  Do not execute but show commands  
+		  -f,--force-execute
+		                Force to copy
+		  -i,--first-create
+		                First create
+		  -p,--dest-host-port=<port>
+		                Host ssh port number
+		  -r,  --backup-rootdir=<dir>
+		                Root directory on backup site. <dir> should be the absolute path
+		                name. All fies save under <dir>/<host>
 		EOF
 		;;
 	esac
