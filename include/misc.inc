@@ -32,21 +32,26 @@ VERSION_SBACKUP=1.0
 VERSION_SLGN=1.0
 VERSION_W3=1.0
 VERSION_WL=1.0
-VERSION_XEMCS=1.0
+VERSION_EMCS=1.0
 VERSION_XTRM=1.0
 eval VERSION=\${VERSION_$(echo $PROGRAM_NAME | tr '-' '_' | tr "[[:lower:]]" "[[:upper:]]")}
 	
 : ${DESTDIR:=/hosts/$HOST}
 : ${EMACS_CMD:=xemacs}
+EMACS_NAME=$(echo "$EMACS_CMD" | awk '{n=index($0,"emacs");print toupper(substr($0, 1, n))substr($0, n+1, length($0))}')
 : ${EMACS_TTY_ARGS:='-nw -no-site-file'}
-: ${EMACS_WL_ARGS:='-f prom-wl'}
-: ${EMACS_TTY_WL_ARGS:='-nw -no-site-file -f wl'}
 : ${EMACS_BACKGROUND_PIXMAP:=$OPENTOOLSDATADIR/images/Firebird-Kingdom.xpm}
-: ${EMACS_FOREGROUND_COLOR:=White}
-: ${EMACS_BACKGROUND_COLOR:=Black}
-: ${EMACS_BACKGROUND_DEFAULT:=${EMACS_BACKGROUND_PIXMAP}}
-: ${EMACS_PRE_RUN_COMMANDS:=mailprc}
-: ${EMACS_FILL_COLUMN:=60}
+: ${EMACS_FOREGROUND_COLOR:=Black}
+: ${EMACS_BACKGROUND_COLOR:=White}
+: ${EMACS_BACKGROUND_DEFAULT:=${EMACS_BACKGROUND_COLOR}}
+: ${WL_EMACS_ARGS:='-f prom-wl'}
+: ${WL_EMACS_BACKGROUND_COLOR:=Black}
+: ${WL_EMACS_BACKGROUND_DEFAULT:=${WL_EMACS_BACKGROUND_PIXMAP}}
+: ${WL_EMACS_BACKGROUND_PIXMAP:=$OPENTOOLSDATADIR/images/Firebird-Kingdom.xpm}
+: ${WL_EMACS_FILL_COLUMN:=60}
+: ${WL_EMACS_FOREGROUND_COLOR:=White}
+: ${WL_EMACS_PRE_RUN_COMMANDS:=mailprc}
+: ${WL_EMACS_TTY_ARGS:='-nw -no-site-file -f wl'}
 : ${XTERM_FOREGROUND_COLOR:=Black}
 : ${XTERM_BACKGROUND_COLOR:=White}
 
