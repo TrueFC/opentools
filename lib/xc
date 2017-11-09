@@ -218,7 +218,7 @@ get-windowgeometry()
 		RightTop)
 			case $__window_size in
 			800x600)	__geometry='82x29+0+64'		;;
-			1024x600)	__geometry='106x29-50-1'	;;
+			1024x600)	__geometry='106x29-56-0'	;;
 			1024x768)	__geometry='83x30+0+64'		;;
 			1280x800)	__geometry='86x33+0+64'		;;
 			1280x1024)	__geometry='86x40+0+132'	;;
@@ -344,6 +344,7 @@ set-resources()
 	local	__background_color=""				\
 		__default_color=""				\
 		__foreground_color=""				\
+		__is_remote_args='-f'				\
 		__mode						\
 		__resources=""					\
 		__resources_var_name				\
@@ -362,6 +363,9 @@ set-resources()
 			shift
 			__foreground_color=$1
 			;;
+		-l)
+			__is_remote_args="$__is_remote_args${__is_remote_args:+ }-l"
+			;;
 		-T)
 			__mode=xterm
 			;;
@@ -377,7 +381,7 @@ set-resources()
 	__resources_var_name=$1
 	case $__mode in
 	emacs)
-		if is-remote -f; then
+		if is-remote $__is_remote_args; then
 			__resource_name='XTerm*background'
 			__default_color=$background_xterm_color
 		else
@@ -388,7 +392,7 @@ set-resources()
 				__resources="$__resource_name:$__default_color"
 				;;
 			image)
-				if ! is-remote -f; then
+				if ! is-remote $__is_remote_args; then
 					__resource_name='Emacs*EmacsFrame.default.attributeBackgroundPixmap'
 					if [ -f $__default_color ]; then
 						__resources="$__resource_name:$__default_color"
@@ -411,7 +415,7 @@ set-resources()
 				__resources="$__resource_name:$__background_color"
 				;;
 			image)
-				if ! is-remote -f; then
+				if ! is-remote $__is_remote_args; then
 					__resource_name='Emacs*EmacsFrame.default.attributeBackgroundPixmap'
 					if [ -f $__background_color ]; then
 						__resources="$__resource_name:$__background_color"
@@ -429,7 +433,7 @@ set-resources()
 		else
 			__resources="$__resource_name:$__default_color"
 		fi
-		if is-remote -f; then
+		if is-remote $__is_remote_args; then
 			__resource_name='XTerm*foreground'
 			__default_color=$foreground_xterm_color
 		else
@@ -448,7 +452,7 @@ set-resources()
 		else
 			__resources="$__resources${__resources:+\n}$__resource_name:$__default_color"
 		fi
-		if is-remote -f; then
+		if is-remote $__is_remote_args; then
 			__resources=$(get-commandargs -T -r "$__resources")
 		else
 			__resources=$(get-commandargs -E -r "$__resources")
