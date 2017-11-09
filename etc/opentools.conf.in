@@ -2,11 +2,15 @@
 ###                                                                   ###
 ###    Global setting for OpenTools scripts                           ###
 ###                                                                   ###
+### !!! WARNING: This congiguration file is used by both sh and ruby  ###
+###              scripts. So be careful to use both sh and ruby when  ###
+###              rewriting this file.                                 ###
+###                                                                   ###
 #########################################################################
 
 ## Root directory of OpenTools.
 ## Normally:/usr/local/opentools
-OPENTOOLSDIR=%%OPENTOOLSDIR%%
+OPENTOOLSDIR='%%OPENTOOLSDIR%%'
 
 ## Where OpenTools include files exist.
 ## Default:${OPENTOOLSDIR}/include
@@ -22,4 +26,4 @@ OPENTOOLSDIR=%%OPENTOOLSDIR%%
 
 ## Where OpenTools scripts install.
 ## Normally:/usr/local/bin, Default:${OPENTOOLSDIR}/bin
-OPENTOOLSBINDIR=%%OPENTOOLSBINDIR%%
+OPENTOOLSBINDIR='%%OPENTOOLSBINDIR%%'
