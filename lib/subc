@@ -2927,13 +2927,17 @@ is-ipaddress()
 
 is-remote()
 {
-	local	__force_exec=false				\
+	local	__allways_local=false				\
+		__force_exec=false				\
 		__function__=is-remote
 
 	while [ $# -gt 0 ]; do
 		case $1 in
 		-f)
 			__force_exec=true
+			;;
+		-l)
+			__allways_local=true
 			;;
 		-*)
 			error "unknown option '$1'"
@@ -2944,8 +2948,8 @@ is-remote()
 		esac
 		shift
 	done
-	if $_is_remote_checked; then
-		if ! $_is_remote; then
+	if $_is_remote_checked || $__allways_local; then
+		if ! $_is_remote || $__allways_local; then
 			if ! $__force_exec; then
 				error "not in remote but in local"
 			else
