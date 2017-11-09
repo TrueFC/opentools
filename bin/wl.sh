@@ -190,15 +190,15 @@ main()
 		runc      xterm -name \"$application_name\"	\
 				-T \"$window_title\"		\
 				-geometry $window_geometry	\
-				$eval_resources			\
-				-e env TERM=xterm ssh $dest_sshargs \"${dest_pre_run_commands}$EMACS_CMD $EMACS_TTY_WL_ARGS $run_elisps\" \&
+				$resources_args			\
+				-e env TERM=xterm ssh $dest_sshargs \"${dest_pre_run_commands}$EMACS_CMD $WL_EMACS_TTY_ARGS $elisps_args\" \&
 	else
 		runc $EMACS_CMD -name \"$application_name\"	\
-				$EMACS_WL_ARGS			\
+				$WL_EMACS_ARGS			\
 				-title \"$window_title\"	\
 				-geometry $window_geometry	\
-				$run_elisps			\
-				$eval_resources \&
+				$elisps_args			\
+				$resources_args \&
 	fi
 
 	finalize
@@ -209,14 +209,14 @@ main()
 globalize()
 {
 	background_color=""
-	background_emacs_color=$EMACS_BACKGROUND_DEFAULT
-	background_xterm_color=$EMACS_BACKGROUND_COLOR
-	fill_column=$EMACS_FILL_COLUMN
+	background_emacs_color=$WL_EMACS_BACKGROUND_DEFAULT
+	background_xterm_color=$WL_EMACS_BACKGROUND_COLOR
+	fill_column=$WL_EMACS_FILL_COLUMN
 	foreground_color=""
-	foreground_emacs_color=$EMACS_FOREGROUND_COLOR
-	foreground_xterm_color=$EMACS_FOREGROUND_COLOR
+	foreground_emacs_color=$WL_EMACS_FOREGROUND_COLOR
+	foreground_xterm_color=$WL_EMACS_FOREGROUND_COLOR
 	position=LT
-	pre_run_commands="$EMACS_PRE_RUN_COMMANDS"
+	pre_run_commands="$WL_EMACS_PRE_RUN_COMMANDS"
 }
 
 initialize()
@@ -233,9 +233,9 @@ initialize()
 		error "too more arguments"
 	fi
 	check-host $dest_hostname
-	set-resources -E -b "$background_color" -f "$foreground_color" eval_resources
+	set-resources -E -b "$background_color" -f "$foreground_color" resources_args
 	set-elisps -c $fill_column elisps
-	run_elisps=$(get-commandargs -E -e "$elisps")
+	elisps_args=$(get-commandargs -E -e "$elisps")
 	if is-remote -f; then
 		dest_username=$(complete-hostform -u $dest_hostname)
 		dest_sshargs="-4 -t -M $(complete-hostform -p -s $dest_hostname)"
@@ -258,30 +258,37 @@ usage()
 		;;
 	-l)
 		cat <<- EOF
-		OpenTools $PROGRAM_NAME $VERSION, run Wanderlust on emacs.
+		OpenTools $PROGRAM_NAME $VERSION, run Wanderlust on $EMACS_NAME.
 		
 		Usage: $COMMAND_NAME [-hn] [-b <bg color>] [-c <fill column>] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-f <fg color>] [--help] [-r <pre-run commnds>] [<dest host>]
-		  Run Wanderlust on emacs at <dest host>. If <dest host> is  not specified, run on
-		  localhost.
+		  Run Wanderlust on $EMACS_NAME at <dest host>. If <dest host> is not specified, run
+		  on localhost.
 
 		Options:
-		  -b,--background-color=<bg color> Set backgroud color to <bg color>. If
-		                <bg color> is a image file, backgroud color set to the image file.
-		  -c,--fill-column=<fill column> Set text width column to <fill column>. Column
-		                would be folded automatically with <fill column>.
-		  -d,--debug-mode=<debug mode> Debugging with <debug mode>. <debug mode>=number or
-		                'module'. if 'module',<debug level)=1.
-		  --debug-commands=<debug commands> If <debug mode>='module', debug only on
-		                <debug commands>. Default <debug commands>=DEBUG_COMMANDS.
-		  --debug-functions=<debug functions> If <debug mode>='module', debug only on
-		                <debug functions> of <debug commands>.
-		                Default <debug functions>=DEBUG_FUNCTIONS
-		  -f,--foreground-color=<bg color> Set foregroud color to <fg color>.
+		  -b,--background-color=<bg color>
+		                Set backgroud color to <bg color>. If <bg color> is a image
+		                file, backgroud color set to the image file.
+		  -c,--fill-column=<fill column>
+		                Set text width column to <fill column>. Column would be folded
+		                automatically with <fill column>.
+		  -d,--debug-mode=<debug mode>
+		                Debugging with <debug mode>. <debug mode> is a digit or
+		                'module'. If <debug mode> is 'module',<debug level)=1.
+		  --debug-commands=<debug commands>
+		                If <debug mode> is 'module', debug only on <debug commands>.
+		                Default:<debug commands>=DEBUG_COMMANDS.
+		  --debug-functions=<debug functions>
+		                If <debug mode> is 'module', debug only on <debug functions> of
+		                <debug commands>.
+		                Default:<debug functions>=DEBUG_FUNCTIONS
+		  -f,--foreground-color=<bg color>
+		                Set foregroud color to <fg color>.
 		  -h            Print short usage
 		  --help        Print long usage(this help)
 		  -n,--dry-run  Do not execute but show commands  
-		  -r,--pre-run-commnds=<pre-run commnds> Run commnds before emacs running.
-		                This option only works running remote host on xterm.
+		  -r,--pre-run-commnds=<pre-run commnds>
+		                Run commnds before emacs running. This option only works
+		                running remote host on xterm.
 		EOF
 		;;
 	esac
