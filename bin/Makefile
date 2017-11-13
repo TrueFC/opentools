@@ -16,8 +16,8 @@ OPENTOOLSBINS?=	autocol.rb		\
 		wl.sh			\
 		xtrm.sh
 SCRIPTS=	${OPENTOOLSBINS:R}
-PREFIX?=	${LOCALBASE}
-SCRIPTSDIR=	${PREFIX}/bin
+DESTPREFIX?=	${LOCALBASE}
+SCRIPTSDIR=	${DESTPREFIX}/bin
 
 LOCALBASE?=	/usr/local
 RUBY_SCRIPTS=	${OPENTOOLSBINS:M*.rb}
@@ -32,12 +32,12 @@ beforeinstall:
 
 .for __src in ${RUBY_SCRIPTS}
 ${__src:R}: ${__src}
-	sed -E  -e 's,%%OPENTOOLSDIR%%,${PREFIX}/opentools,g' \
+	sed -E  -e 's,%%OPENTOOLSDIR%%,${DESTPREFIX}/opentools,g' \
 		-e 's,%%RUBY_ARGS%%,${RUBY_ARGS},g' ${.ALLSRC} > ${.TARGET}
 .endfor
 .for __src in ${SH_SCRIPTS}
 ${__src:R}: ${__src}
-	sed -E  -e 's@^(\.[[:space:]]+).*(/common.inc)$$@\1\$${OPENTOOLSDIR:=${PREFIX}/opentools}/include\2@' \
+	sed -E  -e 's@^(\.[[:space:]]+).*(/common.inc)$$@\1\$${OPENTOOLSDIR:=${DESTPREFIX}/opentools}/include\2@' \
 		${.ALLSRC} > ${.TARGET}
 .endfor
 

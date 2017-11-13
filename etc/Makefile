@@ -1,6 +1,6 @@
 FILES=		opentools.conf
-PREFIX?=	${LOCALBASE}
-FILESDIR=	${PREFIX}/etc
+DESTPREFIX?=	${LOCALBASE}
+FILESDIR=	${DESTPREFIX}/etc
 
 LOCALBASE?=	/usr/local
 
@@ -11,8 +11,8 @@ beforeinstall:
 	mkdir -p ${DESTDIR}${FILESDIR}
 
 opentools.conf: opentools.conf.in
-	sed -E  -e 's,%%OPENTOOLSDIR%%,${PREFIX}/opentools,' \
-		-e 's,%%OPENTOOLSBINDIR%%,${PREFIX}/bin,' ${.ALLSRC} > ${.TARGET}
+	sed -E  -e 's,%%OPENTOOLSDIR%%,${DESTPREFIX}/opentools,' \
+		-e 's,%%OPENTOOLSBINDIR%%,${DESTPREFIX}/bin,' ${.ALLSRC} > ${.TARGET}
 
 install: beforeinstall installfiles
 

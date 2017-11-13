@@ -7,8 +7,8 @@ FILES=		common.inc	\
 		ports.inc	\
 		sdoc.inc.rb	\
 		sys.inc
-PREFIX?=	${LOCALBASE}/opentools
-FILESDIR=	${PREFIX}/include
+DESTPREFIX?=	${LOCALBASE}/opentools
+FILESDIR=	${DESTPREFIX}/include
 
 LOCALBASE?=	/usr/local
 
