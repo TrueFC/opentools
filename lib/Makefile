@@ -5,8 +5,8 @@ FILES=		osc	\
 		sysrc	\
 		xc	\
 		xepkgsc
-DESTDIR?=	${LOCALBASE}/opentools
-FILESDIR=	/lib
+PREFIX?=	${LOCALBASE}/opentools
+FILESDIR=	${PREFIX}/lib
 
 LOCALBASE?=	/usr/local
 

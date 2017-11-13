@@ -1,6 +1,6 @@
 FILES=		LeapDay.html
-DESTDIR?=	${LOCALBASE}/opentools
-FILESDIR=	/Templates/github/pages
+PREFIX?=	${LOCALBASE}/opentools
+FILESDIR=	${PREFIX}/Templates/github/pages
 
 LOCALBASE?=	/usr/local
 
