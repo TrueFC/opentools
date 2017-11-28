@@ -12,24 +12,24 @@ on a terminal, but for Unix users Scripts that save one effort.
 
 The main ones are the following eight.
 
-* **bwsr**	 Start up the browser.
-* **mailprc**	 Command line based MDA. POP/APOP/Maildir compatible
-* **sbackup**	 Remote backup to day, week, month, year
-* **slgn**	 Launch xterm and log in remotely. Color can be specified
-* **w3**	 Launch w3m on xterm. Color can be specified
-* **wl**	 Launch emacs+Wanderlust locally or remotely. Decoration can be specified
-* **xemcs**	 Start XEmacs. Position and decoration can be specified
-* **xtrm**	 Start XTerm. Position and color can be specified
+* **bwsr**:	 Start up the browser.
+* **mailprc**:	 Command line based MDA. POP/APOP/Maildir compatible
+* **sbackup**:	 Remote backup to day, week, month, year
+* **slgn**:	 Launch xterm and log in remotely. Color can be specified
+* **w3**:	 Launch w3m on xterm. Color can be specified
+* **wl**:	 Launch emacs+Wanderlust locally or remotely. Decoration can be specified
+* **xemcs**:	 Start XEmacs. Position and decoration can be specified
+* **xtrm**:	 Start XTerm. Position and color can be specified
 
 In addition to this, there are auxiliary tools as below.
 
-* **autocol**	Correct HTML table column
-* **create-portstree**	Make a unique ports tree
-* **latex2latex**	Fiddling with LaTeX source
-* **newest**		Pick up the latest one of the specified files
-* **sct**		Remote directory tree copy. Permission and Symbolic link save
-* **sdoc2page**		SmartDoc HTML->GitHub page conversion
-* **sdoc2sdoc**		Edit SmartDoc HTML
+* **autocol**:		Correct HTML table column
+* **create-portstree**:	Make a unique ports tree
+* **latex2latex**:	Fiddling with LaTeX source
+* **newest**:		Pick up the latest one of the specified files
+* **sct**:		Remote directory tree copy. Permission and Symbolic link save
+* **sdoc2page**:	SmartDoc HTML->GitHub page conversion
+* **sdoc2sdoc**:	Edit SmartDoc HTML
 
 For details, refer to the respective help (indicated by '`--help`'
 option). There is no manual for now `;-)`
@@ -40,9 +40,9 @@ option). There is no manual for now `;-)`
 
 #### 1. Check out this repository
 
-Check out `github.com/styckm/opentools`.
+Check out `github.com/TrueFC/opentools`.
 
-	% git clone https://github.com/styckm/opentools.git
+	% git clone https://github.com/TrueFC/opentools.git
 
 #### 2. Installation
 
@@ -54,20 +54,20 @@ Install it.
 By default, commands are installed in `/usr/local/bin` and others
 (libraries and include files) are installed in `/usr/local/opentools`. If
 you want to change the installation destination, specify the installation
-destination directory in DEST, 
+destination directory in DESTPREFIX, 
 
-	# make DEST=/install_destdir install
+	# make DESTPREFIX=/install_destdir install
 
 The configuration file is `/usr/local/etc/opentools.conf`. You can basically
 write the initial settings of all commands in this file. See
 `/usr/local/opentools/include/*.inc` to see what settings can be made. Include
 files corresponding to each command are as follows. 
 
-* `common.inc`	**Common**	
-* `mail.inc`	**mailprc**		
-* `misc.inc`	**bwsr**, **sbackup**, **slgn**, **w3**, **wl**, **xemcs**, **xtrm**
-* `ports.inc`	**create-portstree**
-* `sys.inc`	**newest**, **sct**
+* `common.inc`:	**Common**	
+* `mail.inc`:	**mailprc**		
+* `misc.inc`:	**bwsr**, **sbackup**, **slgn**, **w3**, **wl**, **xemcs**, **xtrm**
+* `ports.inc`:	**create-portstree**
+* `sys.inc`:	**newest**, **sct**
 
 ### FreeBSD
 

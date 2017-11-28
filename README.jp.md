@@ -11,24 +11,24 @@ OpenTools は BSD Unix 使いのための小道具を集めたものです．リ
 
 主なものは以下の 8 つです．
 
-* **bwsr**	 ブラウザを起動する．
-* **mailprc**	 コマンドラインベースの MDA．POP/APOP/Maildir 対応
-* **sbackup**	 日，週，月，年単位にリモートバックアップする
-* **slgn**	 xterm を立ち上げリモートログインする．色を指定可能
-* **w3**	 xterm 上で w3m を立ち上げる．色を指定可能
-* **wl**	 ローカルまたはリモートで emacs＋Wanderlust を起動する．装飾を指定可能
-* **xemcs**	 XEmacs を起動する．位置と装飾を指定可能
-* **xtrm**	 XTerm を起動する．位置と色を指定可能
+* **bwsr**:	 ブラウザを起動する．
+* **mailprc**:	 コマンドラインベースの MDA．POP/APOP/Maildir 対応
+* **sbackup**:	 日，週，月，年単位にリモートバックアップする
+* **slgn**:	 xterm を立ち上げリモートログインする．色を指定可能
+* **w3**:	 xterm 上で w3m を立ち上げる．色を指定可能
+* **wl**:	 ローカルまたはリモートで emacs＋Wanderlust を起動する．装飾を指定可能
+* **xemcs**:	 XEmacs を起動する．位置と装飾を指定可能
+* **xtrm**:	 XTerm を起動する．位置と色を指定可能
 
 この他，以下のような補助ツールもあります．
 
-* **autocol**	HTML の table コラムを矯正
-* **create-portstree**	固有の ports ツリーを作る
-* **latex2latex**	 LaTeX のソースをいじる
-* **newest**		 指定したファイルのうち最新のものをピックアップする
-* **sct**		 リモートディレクトリツリーコピー．パーミッション・シンボリックリンク保存
-* **sdoc2page**		 SmartDoc の HTML → GitHub ページ 変換
-* **sdoc2sdoc**		 SmartDoc の HTML を編集
+* **autocol**:		HTML の table コラムを矯正
+* **create-portstree**:	固有の ports ツリーを作る
+* **latex2latex**:	 LaTeX のソースをいじる
+* **newest**:		 指定したファイルのうち最新のものをピックアップする
+* **sct**:		 リモートディレクトリツリーコピー．パーミッション・シンボリックリンク保存
+* **sdoc2page**:	 SmartDoc の HTML → GitHub ページ 変換
+* **sdoc2sdoc**:	 SmartDoc の HTML を編集
 
 詳しくはそれぞれのヘルプ('`--help`' オプションで表示)を参照してください．今の
 ところマニュアルはありません `;-)`
@@ -39,9 +39,9 @@ OpenTools は BSD Unix 使いのための小道具を集めたものです．リ
 
 #### 1. このレポジットリをチェックアウト
 
-`github.com/styckm/opentools` をチェックアウトします．
+`github.com/TrueFC/opentools` をチェックアウトします．
 
-	% git clone https://github.com/styckm/opentools.git
+	% git clone https://github.com/TrueFC/opentools.git
 
 #### 2. インストール
 
@@ -52,21 +52,21 @@ OpenTools は BSD Unix 使いのための小道具を集めたものです．リ
 
 デフォルトでは，コマンドは `/usr/local/bin` へ，その他
 (ライブラリやインクルードファイル)は `/usr/local/opentools` へインストールさ
-れます．インストール先を変更したい場合には DEST にインストール先のディレクト
+れます．インストール先を変更したい場合には DESTPREFIX にインストール先のディレクト
 リを指定して，
 
-	# make DEST=/install_destdir install
+	# make DESTPREFIX=/install_destdir install
 
 とします．設定ファイルは `/usr/local/etc/opentools.conf` です．基本的に
 全てのコマンドの初期設定をこのファイルに書くことができます．どのような設定が
 できるかは `/usr/local/opentools/include/*.inc` を見てください．各コマンドに
 対応するインクルードファイルは以下のとおりです．
 
-* `common.inc`	**共通**	
-* `mail.inc`	**mailprc**		
-* `misc.inc`	**bwsr**, **sbackup**, **slgn**, **w3**, **wl**, **xemcs**, **xtrm**
-* `ports.inc`	**create-portstree**
-* `sys.inc`	**newest**, **sct**
+* `common.inc`:	**共通**	
+* `mail.inc`:	**mailprc**		
+* `misc.inc`:	**bwsr**, **sbackup**, **slgn**, **w3**, **wl**, **xemcs**, **xtrm**
+* `ports.inc`:	**create-portstree**
+* `sys.inc`:	**newest**, **sct**
 
 
 ### FreeBSD
