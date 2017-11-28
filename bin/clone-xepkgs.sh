@@ -502,6 +502,7 @@ pass-xepkgs()
 
 finalize()
 {
+	unset-exports
 }
 
 usage()

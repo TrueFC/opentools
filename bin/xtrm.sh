@@ -167,6 +167,7 @@ main()
 	putdebug 1 1 application_name
 	window_title=$(get-windowdecoration -t xterm)
 	putdebug 1 2 window_title
+	runc unset-exports
 	runc      xterm -name \"$application_name\"	\
 			-T \"$window_title\"		\
 			$eval_resources			\
@@ -196,6 +197,7 @@ initialize()
 
 finalize()
 {
+	unset-exports
 }
 	
 usage()

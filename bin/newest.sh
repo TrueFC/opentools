@@ -168,6 +168,7 @@ initialize()
 
 finalize()
 {
+	unset-exports
 }
 
 

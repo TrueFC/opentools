@@ -221,6 +221,7 @@ initialize()
 
 finalize()
 {
+	unset-exports
 }
 
 check-mailfolder()

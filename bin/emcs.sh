@@ -150,6 +150,7 @@ main()
 	putdebug 1 1 application_name
 	window_title=$(get-windowdecoration -t $EMACS_CMD)
 	putdebug 1 2 window_title
+	runc unset-exports
 	runc $EMACS_CMD -name \"$application_name\"		\
 			-T \"$window_title\"			\
 			-geometry $window_geometry		\
@@ -181,6 +182,7 @@ initialize()
 
 finalize()
 {
+	unset-exports
 }
 	
 usage()

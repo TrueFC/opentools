@@ -200,6 +200,7 @@ initialize()
 
 finalize()
 {
+	unset-exports
 }
 
 usage()

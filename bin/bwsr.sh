@@ -125,6 +125,7 @@ main()
 
 	initialize "$@"
 
+	runc unset-exports
 	case $browser in
 	[fF]|[fF][fF]|[fF][oO][xX]|[fF][iI][rR][eE][fF][oO][xX])
 		runc firefox -UILocale $locale \&
@@ -166,6 +167,7 @@ initialize()
 
 finalize()
 {
+	unset-exports
 }
 	
 usage()

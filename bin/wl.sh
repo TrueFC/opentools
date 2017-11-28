@@ -186,6 +186,7 @@ main()
 	putdebug 1 1 application_name
 	window_title=$(get-windowdecoration -h $dest_hostname -t wl)
 	putdebug 1 2 window_title
+	runc unset-exports
 	if is-remote -f; then
 		runc      xterm -name \"$application_name\"	\
 				-T \"$window_title\"		\
@@ -246,6 +247,7 @@ initialize()
 
 finalize()
 {
+	unset-exports
 }
 	
 usage()

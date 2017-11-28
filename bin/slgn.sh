@@ -150,6 +150,7 @@ main()
 	putdebug 1 1 application_name
 	window_title=$(get-windowdecoration -u $dest_username -h $dest_hostname -t slgn)
 	putdebug 1 2 window_title
+	runc unset-exports
 	runc xterm      -name \"$application_name\"	\
 			-T \"$window_title\" 		\
 			-geometry $window_geometry 	\
@@ -189,6 +190,7 @@ initialize()
 
 finalize()
 {
+	unset-exports
 }
 	
 usage()
