@@ -36,7 +36,7 @@ VERSION_EMCS=1.0
 VERSION_XTRM=1.0
 eval VERSION=\${VERSION_$(echo $PROGRAM_NAME | tr '-' '_' | tr "[[:lower:]]" "[[:upper:]]")}
 	
-: ${DESTDIR:=/hosts/$HOST}
+: ${BACKUPROOTDIR:=/hosts}
 : ${EMACS_CMD:=xemacs}
 EMACS_NAME=$(echo "$EMACS_CMD" | awk '{n=index($0,"emacs");print toupper(substr($0, 1, n))substr($0, n+1, length($0))}')
 : ${EMACS_TTY_ARGS:='-nw -no-site-file'}
