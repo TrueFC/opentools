@@ -32,6 +32,65 @@ if [ -z "$_portsc_loaded" ]; then
 _portsc_loaded="YES"
 
 
+_f_get_alldepends_awk='
+BEGIN {
+	PORTSDIR    = ENVIRON["PORTSDIR"]
+	all_depends = ""
+	ports       = ""
+	split(depends, package_depends, /\n/)
+	for (i in package_depends) {
+		split(package_depends[i], field, /:/)
+		depend_list = field[1]" "field[2]
+		ports = ports ? ports" "field[2] : field[2]
+		all_depends = all_depends ? all_depends"\n"depend_list : depend_list
+	}
+	split(ports, package_depends_ports, / /)
+	ports = ""
+}
+{
+	for (i in package_depends_ports) {
+		if ($0 == package_depends_ports[i]) {
+			delete package_depends_ports[i]
+			next
+		}
+	}
+	ports = ports ? ports" "$0 : $0
+}
+END {
+	for (i = 1; i <= split(ports, rest_depends_ports, / /); i++) {
+		cmdline = "make -kiVPKGNAME -C " PORTSDIR "/" rest_depends_ports[i] " 2> /dev/null" 
+		while (cmdline | getline) { pkgname = $0 }
+		depend_list = pkgname" "rest_depends_ports[i]
+		all_depends = all_depends ? all_depends"\n"depend_list : depend_list
+	}
+	print all_depends
+}'
+
+_f_get_install_awk='
+BEGIN {
+	sub(/\(.*$/, "", execenv)
+	ntargets = split(execenv, target, /[[:space:]]*,[[:space:]]*/)
+	quiet    = quiet ? quiet : 0
+	correct  = 0
+	cmdlines = ""
+}
+{
+	nmodes = split($0, mode, /[[:space:]]*,[[:space:]]*/)
+}
+END {
+	if (ntargets == nmodes) {
+		correct = 1
+		if (! quiet) {
+			for (i in target) {
+				cmdline  = "_" target[i] "_install=" mode[i]
+				cmdlines = cmdlines ? cmdlines "\n" cmdline : cmdline
+			}
+		}
+	}
+	if (correct && ! quiet) { print cmdlines }
+	exit ! correct
+}'
+
 _f_portargs_awk='
 BEGIN {
 	args = ""
@@ -239,6 +298,46 @@ get-categories()
 	esac
 }
 
+get-installmode()
+{
+	local	__cmdline					\
+		__cmdlines					\
+		__function__=set-installmode			\
+		__quiet=false
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-q)
+			__quiet=true
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	if [ -n "$INSTALL" ]; then
+		if $__quiet; then
+			if echo "$INSTALL" | awk -v quiet=1 -v execenv="$ExecENV" "$_f_get_install_awk"; then
+				return 0
+			else
+				error "'INSTALL' does not match 'ExecENV'"
+			fi
+		else
+			__cmdlines=$(echo "$INSTALL" | awk -v execenv="$ExecENV" "$_f_get_install_awk")
+			IFS=$'\n'
+			for __cmdline in "$__cmdlines"; do
+				eval $__cmdline
+			done
+			unset IFS
+			eval echo \$_${_default_exec_target}_install 
+		fi
+	fi
+}
+
 get-latestpkg()
 {
 	local	__mode=normal					\
@@ -283,6 +382,18 @@ get-latestpkg()
 	else
 		return 1
 	fi
+}
+
+get-alldepends()
+{
+	local	__function__=get-alldepends			\
+		__package_depends				\
+		__port=$1
+
+	__package_depends=$( (cd $PORTSDIR/$__port; make -ki package-depends 2> /dev/null) | awk "$_f_lines_to_newlined_string_awk")
+	putdebug 1 0 __package_depends
+	get-alldependslist $__port | awk -v depends="$__package_depends" "$_f_get_alldepends_awk"
+	
 }
 
 get-portargs()
@@ -335,6 +446,14 @@ get-pportsdir()
 	else
 		error "'$DISTSDIR/$__dkgorigin/ports' not exists"
 	fi
+}
+
+get-wrkdir()
+{
+	local	__function__=get-wrkdir				\
+		__port=$1
+
+	(cd $PORTSDIR/$__port; make -VWRKDIR)
 }
 
 get-wrkdirs()
@@ -517,7 +636,7 @@ portbuild()
 	set-portbuild "$__args"
 	case $_portbuild_mode in
 	pkgbuilding)
-		_portbuild_make_target=package
+		_portbuild_make_target=package-recursive
 		case $(check-ports $__port) in
 		none|unknown)
 			error "port '$__port' not found."
@@ -528,7 +647,7 @@ portbuild()
 		esac
 		;;
 	pkgrebuilding)
-		_portbuild_make_target=package
+		_portbuild_make_target=package-recursive
 		case $(check-ports $__port) in
 		none|unknown)
 			error "port '$__port' not found."
@@ -539,13 +658,32 @@ portbuild()
 			;;
 		esac
 		;;
-	normal)
+	pkginstall)
+		case $(check-ports $__port) in
+		none|unknown)
+			error "port '$__port' not found."
+			;;
+		*)
+			portsbuild $__port
+			;;
+		esac
+		;;
+	portinstall)
 		_portbuild_make_target=install
-		portinstall $__port
+		case $(check-ports $__port) in
+		none|unknown)
+			error "port '$__port' not found."
+			;;
+		*)
+			portsbuild $__port
+			;;
+		esac
+		;;
+	*)
+		error "unknown port build mode '$_portbuild_mode'"
 		;;
 	esac
 }
-
 
 portcorrect()
 {
@@ -558,9 +696,16 @@ portcorrect()
 	fi
 }
 
-portinstall()
+portname()
 {
-	local	__function__=portinstall			\
+	local	__port=$1
+
+	(cd $PORTSDIR/$__port; make -V PORTNAME)
+}
+
+portsbuild()
+{
+	local	__function__=portsbuild				\
 		__mode=normal					\
 		__pkgname					\
 		__port=$1
@@ -570,26 +715,58 @@ portinstall()
 	putdebug 1 1 __pkgname _portbuild_mode
 	case $_portbuild_mode in
 	pkgbuilding|pkgrebuilding)
-		runc cd $PORTSDIR/$__port\; make $_portbuild_make_args $_portbuild_make_target
-		putdebug 1 2 _portbuild_make_args _portbuild_make_target
-		;;
-	*)
 		if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
-			if ! runc pkg add $PACKAGES/All/$__pkgname$PKGSUFX; then
-				error "pkg add '$__pkgname$PKGSUFX' failed"
-			fi
+			printf "%-72s\n" ":===> $__pkgname already built. skipped"
+			return 0
 		else
+			putime -s portsbuild
+			printf "%-42s%-30s\n" ":===> Building $__pkgname start" "$(putime)"
+			portpremake
+			set-pkgbuilt -r $__port
 			runc cd $PORTSDIR/$__port\; make $_portbuild_make_args $_portbuild_make_target
+			putime -e portsbuild
+			printf "%-42s%-30s\n" ":<=== Building $__pkgname end" "$(putime) ($(putime -i portsbuild))"
+			putdebug 1 2 _portbuild_make_args _portbuild_make_target
 		fi
 		;;
+	pkginstall)
+		if ! pkg info -q $__pkgname; then
+			if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+				putime -s portsbuild
+				printf "%-42s%-30s\n" ":===> Installing $__pkgname start" "$(putime)"
+				if ! runc pkg add $PACKAGES/All/$__pkgname$PKGSUFX; then
+					error "pkg add '$__pkgname$PKGSUFX' failed"
+				fi
+				putime -e portsbuild
+				printf "%-42s%-30s\n" ":<=== Installing $__pkgname end" "$(putime) ($(putime -i portsbuild))"
+			else
+				printf "%-72s\n" ":===> '$__pkgname$PKGSUFX' not found. skipped"
+			fi
+		else
+			printf "%-72s\n" ":===> $__pkgname already installed. skipped"
+		fi
+		;;
+	portinstall)
+		if ! pkg info -q $__pkgname; then
+			putime -s portsbuild
+			printf "%-42s%-30s\n" ":===> Installing $__pkgname start" "$(putime)"
+			if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+				if ! runc pkg add $PACKAGES/All/$__pkgname$PKGSUFX; then
+					error "pkg add '$__pkgname$PKGSUFX' failed"
+				fi
+			else
+				runc cd $PORTSDIR/$__port\; make $_portbuild_make_args $_portbuild_make_target
+			fi
+			putime -e portsbuild
+			printf "%-42s%-30s\n" ":<=== Installing $__pkgname end" "$(putime) ($(putime -i portsbuild))"
+		else
+			printf "%-72s\n" ":===> $__pkgname already installed. skipped"
+		fi
+		;;
+	*)
+		error "unknown port build mode '$_portbuild_mode'"
+		;;
 	esac
-}
-
-portname()
-{
-	local	__port=$1
-
-	(cd $PORTSDIR/$__port; make -V PORTNAME)
 }
 
 portspreupdate()
@@ -690,47 +867,17 @@ portpremake()
 	test -n "$PORTSWRKDIRS" && runc mkdir -p $PORTSWRKDIRS
 }
 
-portsbuild()
-{
-	local	__function__=portsbuild				\
-		__pkgname					\
-		__port=$1					\
-		__ports						\
-		__rpkgname
-
-	__rpkgname=$(pkgname $__port)
-	if [ -f $PACKAGES/All/$__rpkgname$PKGSUFX ]; then
-		printf "%-72s\n" ":===> $__rpkgname already built. skipped"
-		return 0
-	else
-		putime -s portsbuild
-		printf "%-42s%-30s\n" ":===> Building $__rpkgname start" "$(putime)"
-		portpremake
-		if ! portinstall $__port; then
-			error "$__rpkgname build failed"
-		fi
-		__ports=$(get-alldependslist $__port)
-		_portbuild_make_args=''
-		for __port in $__ports; do
-			__pkgname=$(pkgname $__port)
-			if [ ! -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
-				if ! portinstall $__port; then
-					error "$__pkgname build failed"
-				fi
-			fi
-		done
-		putime -e portsbuild
-		printf "%-42s%-30s\n" ":<=== Building $__rpkgname end" "$(putime) ($(putime -i portsbuild))"
-	fi
-}
-
 portsprune()
 {
 	runc pkg delete -afy
 	runc rm -rf $LOCALBASE/\*
-	__wrkdirs="$(get-wrkdirs -w)"
-	if [ -n "$__wrkdirs" ]; then
-		runc rm -rf $__wrkdirs
+	if [ -n "$WRKDIRPREFIX" ]; then
+		__wrkdirs="$(get-wrkdirs -w)"
+		if [ -n "$__wrkdirs" ]; then
+			runc rm -rf $__wrkdirs
+		fi
+	else
+		runc -f find $PORTSDIR -name "work" -type d -exec rm -rf \{} \;
 	fi
 }
 
@@ -800,32 +947,71 @@ prep-portsbuild()
 		__wrkdirs
 
 	if check-ports -i; then
-		if [ -n "$WRKDIRPREFIX" ]; then
-			__wrkdirs="$(get-wrkdirs)"
-			if [ -n "$__wrkdirs" ]; then
-				runc -f rm -rf $__wrkdirs
-			fi
-		else
-			runc -f find $PORTSDIR -name "work" -type d -exec rm -rf \{} \;
-		fi
+		portsprune
 		pkg-install
-#		portbuild "ports-mgmt/portupgrade" ""
 	fi
+}
+
+set-pkgbuilt()
+{
+	local	__function__=set-pkgbuilt			\
+		__mode=normal					\
+		__pkgname					\
+		__port						\
+		__portname					\
+		__ports						\
+		__wrkdir
+
+	while [ $# -gt 0 ]; do
+		case $1 in
+		-r)
+			__mode=recursive
+			;;
+		-*)
+			error "unknown option '$1'"
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+	__port=$1
+	case $__mode in
+	recursive)
+		get-alldepends $__port | \
+		while read __pkgname __port; do
+			putdebug 1 0 __pkgname __port
+			__portname=$(portname $__port)
+			if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+				__wrkdir=$(get-wrkdir $__port)
+				runc mkdir -p $__wrkdir
+				runc touch $__wrkdir/.package_done.$__portname._usr_local
+			fi
+		done
+		;;
+	*)
+		__pkgname=$(pkgname $__port)
+		__portname=$(portname $__port)
+		if [ -f $PACKAGES/All/$__pkgname$PKGSUFX ]; then
+			__wrkdir=$(get-wrkdir $__port)
+			mkdir -p $__wrkdir
+			touch $__wrkdir/.package_done.$__portname._usr_local
+		fi
+		;;
+	esac
 }
 
 set-portbuild()
 {
+	local	__cmdline					\
+		__cmdlines					\
+		__function__=set-portbuild
+
 	if [ $# -lt 1 ]; then
-		case $PKGBUILDING in
-		[Yy][Ee][Ss])
-			_portbuild_mode=pkgbuilding
-			;;
-		esac
-		case $PKGREBUILDING in
-		[Yy][Ee][Ss])
-			_portbuild_mode=pkgrebuilding
-			;;
-		esac
+		if get-installmode -q; then
+			_portbuild_mode=$(get-installmode)
+		fi
 	elif [ $# -lt 2 ]; then
 		_portbuild_make_args=$(get-portargs $1)
 	else
