@@ -89,6 +89,9 @@ main()
 		-n|--dry-run)
 			_dry_run=true
 			;;
+		-P|--passthrough-isalive-host)
+			connected_args="$connected_args${connected_args:+ }-p"
+			;;
 		-p|--dest-host-port=*)
 			option=$1
 			case $option in
@@ -124,7 +127,7 @@ main()
 			esac
 			;;
 		-[a-zA-Z]*)
-			options=$(echo "$1" | expand-options "fhn" "dpr")
+			options=$(echo "$1" | expand-options "fhnP" "dpr")
 			if [ $? -gt 0 ]; then
 				error "illegal option \"$options\""
 			fi
@@ -144,7 +147,7 @@ main()
 
 	initialize "$@"
 
-	if connected $dest_hostname; then
+	if connected $connected_args $dest_hostname; then
 		sct $sct_args $src_path $dest_host:$dest_path
 	fi
 
@@ -155,6 +158,7 @@ main()
 
 globalize()
 {
+	connected_args=""
 	dest_host_port=""
 	force_execute=false
 	sct_args="-i"
@@ -165,14 +169,14 @@ usage()
 	case $1 in
 	-s)
 		cat <<- EOF
-		Usage: $COMMAND_NAME [-fhn] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p <port>] [-r <dir>] [--help] <path> <host>[:<path>]
+		Usage: $COMMAND_NAME [-fhnP] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p <port>] [-r <dir>] [--help] <path> <host>[:<path>]
 		EOF
 		;;
 	-l)
 		cat <<- EOF
 		OpenTools $PROGRAM_NAME $VERSION, a local directory tree to remote site copy tool.
 
-		Usage: $COMMAND_NAME [-fhn] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p <port>] [-r <dir>] [--help] <path> <host>[:<path>]
+		Usage: $COMMAND_NAME [-fhnP] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-p <port>] [-r <dir>] [--help] <path> <host>[:<path>]
 
 		  -d,--debug-mode=<debug mode>
 		                Debugging with <debug mode>. <debug mode> is a digit or
@@ -191,6 +195,9 @@ usage()
 		                Force to copy
 		  -i,--first-create
 		                First create
+		  -P,--passthrough-isalive-host
+		                Passthrough isalive-host in connection check. This is
+		                usefull for gateway host that does not through ICMP.
 		  -p,--dest-host-port=<port>
 		                Host ssh port number
 		  -r,  --backup-rootdir=<dir>
@@ -247,6 +254,7 @@ initialize()
 finalize()
 {
 	rmtmpfile -a
+	unset-exports
 }
 
 
