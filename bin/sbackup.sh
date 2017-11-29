@@ -97,6 +97,9 @@ main()
 		-n|--dry-run)
 			_dry_run=true
 			;;
+		-P|--passthrough-isalive-host)
+			connected_args="$connected_args${connected_args:+ }-p"
+			;;
 		-R|--force-reduction=*)
 			case $mode in
 			auto)
@@ -161,7 +164,7 @@ main()
 			esac
 			;;
 		-[a-zA-Z]*)
-			options=$(echo "$1" | expand-options "ahn" "dRr")
+			options=$(echo "$1" | expand-options "ahnP" "dRr")
 			if [ $? -gt 0 ]; then
 				error "illegal option \"$options\""
 			fi
@@ -192,7 +195,8 @@ main()
 			reduce-datastore
 		else
 			putdebug 1 4 _src_path dest_host dest_path
-			sct -i $src_path $dest_host:$dest_path/$now_digittime
+			sct_args="$sct_args${sct_args:+ }-i"
+			sct $sct_args $src_path $dest_host:$dest_path/$now_digittime
 		fi
 		;;
 	reduction)
@@ -205,7 +209,8 @@ main()
 			error "$dest_host:$dest_path already exist"
 		else
 			putdebug 1 8 src_path dest_host dest_path
-			sct -i $src_path $dest_host:$dest_path
+			sct_args="$sct_args${sct_args:+ }-i"
+			sct $sct_args $src_path $dest_host:$dest_path
 		fi
 		;;
 	esac
@@ -217,10 +222,13 @@ main()
 
 globalize()
 {
+	backup_rootdir=""
+	connected_args=""
+	mode=today
 	periodic_reduce_weekly=false
 	periodic_reduce_monthly=false
 	periodic_reduce_yearly=false
-	mode=today
+	sct_args=""
 }
 
 usage()
@@ -228,23 +236,23 @@ usage()
 	case $1 in
 	-s)
 		cat <<- EOF
-		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>:<dest path>
-		       $COMMAND_NAME -a [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
-		       $COMMAND_NAME -R <key>:<day> [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
+		Usage: $COMMAND_NAME [-nhP] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>:<dest path>
+		       $COMMAND_NAME -a [-nhP] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
+		       $COMMAND_NAME -R <key>:<day> [-nhP] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
 		EOF
 		;;
 	-l)
 		cat <<- EOF
 		OpenTools $PROGRAM_NAME $VERSION, a local directory tree to remote site backuper.
 
-		Usage: $COMMAND_NAME [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>:<dest path>
-		       $COMMAND_NAME -a [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
-		       $COMMAND_NAME -R <key>:<day> [-nh] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
+		Usage: $COMMAND_NAME [-nhP] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>:<dest path>
+		       $COMMAND_NAME -a [-nhP] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
+		       $COMMAND_NAME -R <key>:<day> [-nhP] [-d <debug mode>] [--debug-commands=<debug commands>] [--debug-functions=<debug functions>] [-r <dir>] [--help] <src path> <dest host>[:<dest path>]
 
 		Common:
 		  -d,--debug-mode=<debug mode>
 		                Debugging with <debug mode>. <debug mode> is a digit or
-		                'module'. If <debug mode> is 'module',<debug level)=1.
+		                'module'. If <debug mode> is 'module',<debug level>=1.
 		  --debug-commands=<debug commands>
 		                If <debug mode> is 'module', debug only on <debug commands>.
 		                Default:<debug commands>=DEBUG_COMMANDS.
@@ -255,9 +263,13 @@ usage()
 		  -h            Print short usage
 		  --help        Print long usage(this help)
 		  -n,--dry-run  Do not execute but show commands  
+		  -P,--passthrough-isalive-host
+		                Passthrough isalive-host in connection check. This is
+		                usefull for gateway host that does not through ICMP.
 		  -r,--backup-rootdir=<dir>
 		                Root directory on backup site. <dir> should be the absolute path
-				name. All fies save under <dir>/<dest host>
+		                name. All fies save under <dir>/<dest host>
+		                Default:<dir>=/
 
 		Auto backup mode:
 		  -a,--auto-backup
@@ -265,9 +277,9 @@ usage()
 
 		Reduction mode:
 		  -R,--force-reduction=<key>:<day>
-                                Force reduce datastore with key at day. <key>={week,month,year}
+		                Force reduce datastore with key at day. <key>={week,month,year}
 		                and <day> is a yyyymmdd form to which reduce all days before the
-				day.
+		                day.
 		EOF
 		;;
 	esac
@@ -282,36 +294,44 @@ initialize()
 	if [ -z "$1" -a -z "$2" ]; then
 		error "src_path and dest_host must be specified"
 	fi
+	if [ -z "$backup_rootdir" -o "$backup_rootdir" = "/" ]; then
+		__dest_prefix=""
+	elif echo "$backup_rootdir" | egrep -q '^/[^/]+.*[^/]$' ; then
+		__dest_prefix="$backup_rootdir"
+	else
+		error "backup root directory must be absolute path and does not end with '/'"
+	fi
+	if [ -n "$backup_rootdir" ]; then
+		sct_args="$sct_args${sct_args:+ }-r $backup_rootdir"
+	fi
 	src_path=$1
 	if echo $2 | egrep -q ':'; then
 		dest_host=$(complete-hostform ${2%%:*})
 		set-sshport ${2%%:*}
 		dest_path=${2#*:}
 		if ! echo $dest_path | egrep -q '^/'; then
-			if [ -z "$backup_rootdir" ]; then
-				error "specify backup site absolute path"
-			else
-				dest_path=$backup_rootdir/$dest_path
-			fi
+			dest_path=$__dest_prefix$dest_path
 		fi
 	else
 		dest_host=$(complete-hostform $2)
 		set-sshport $2
+		putdebug 1 0:0 backup_rootdir DESTDIR
 		if [ -z "$backup_rootdir" ]; then
-			dest_path=$DESTDIR
+			dest_path=$BACKUPROOTDIR/$HOST
 		else
-			dest_path=$backup_rootdir/$HOST
+			dest_path=$__dest_prefix/$HOST
 		fi
 	fi
 	dest_hostname=${dest_host#*@}
 	_ssh_args="-p $_ssh_port $dest_host"
-	backup_rootdir=$(echo $dest_path | sed -Ee 's|^(/[^/]+).*$|\1|')
-	if connected $dest_hostname; then
+	putdebug 1 0 dest_path
+	putdebug 1 1 backup_rootdir
+	if connected $connected_args $dest_hostname; then
 		if ! rexec -f "test -d $backup_rootdir"; then
 			error "$dest_host:$backup_rootdir not found"
 		fi
 	fi
-	putdebug 1 1 dest_hostname mode
+	putdebug 1 2 dest_hostname mode
 	case $mode in
 	today|auto)
 		day=$(date '+%d' | sed -Ee 's/^0?//')
@@ -325,20 +345,20 @@ initialize()
 		reduction_year=$((year -= 1))
 		;;
 	reduction)
-		putdebug 1 2 reduction_period
+		putdebug 1 3 reduction_period
 		case $reduction_period in
 		week)
 			stime_now=$(convdate-d2s $reduction_day)
 			week=$(convdate-d2u $reduction_day)
 			reduction_day=$(echo "$reduction_day" | awk '{print substr($0, 1, 8)}')
 			day_begining_month=$(echo "$reduction_day" | awk '{print substr($0, 1, 6)"01"}')
-			putdebug 1 3 stime_now day_begining_month
+			putdebug 1 4 stime_now day_begining_month
 			;;
 		month)
 			reduction_month=$(echo "$reduction_month" | awk '{print substr($0, 1, 6)}')
 			;;
 		year)
-			putdebug 1 4 reduction_year
+			putdebug 1 5 reduction_year
 			reduction_year=$(echo "$reduction_year" | awk '{print substr($0, 1, 4)}')
 			;;
 		esac
@@ -416,6 +436,7 @@ destpath-exist()
 finalize()
 {
 	rmtmpfile -a
+	unset-exports
 }
 
 convdate-h2n()
