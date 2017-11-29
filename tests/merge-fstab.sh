@@ -10,7 +10,7 @@ _debug=false
 _debug_level=1
 file=../tmp/foo
 
-rm -f ../tmp/*
+rm -f ../tmp/foo*
 
 echo "- include (foo2, foo5) -"
 #_debug=true
