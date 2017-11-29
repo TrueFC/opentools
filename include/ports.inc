@@ -32,7 +32,7 @@ VERSION_GET_XEPKGDATA=1.0
 VERSION_CLONE_XEPKGS_XEPKGDATA=1.0
 eval VERSION=\${VERSION_$(echo $PROGRAM_NAME | tr '-' '_' | tr "[[:lower:]]" "[[:upper:]]")}
 
-: ${PORTSDIR:=/usr/ports}
+: ${PORTSDIR:=/usr/ports};					export PORTSDIR
 : ${INDEXDIR:=/usr/ports}
 : ${PORTSREPO:=/usr/ports}
 : ${PORTS_NONCATEGORIES:='.*,CHANGES,CONTRIBUTING.md,COPYRIGHT,GIDs,Keywords,LEGAL,MOVED,Makefile,Mk,README,Templates,Tools,UIDs,UPDATING'}; \
@@ -55,7 +55,7 @@ eval VERSION=\${VERSION_$(echo $PROGRAM_NAME | tr '-' '_' | tr "[[:lower:]]" "[[
 : ${_option_metaport:=false}
 : ${_ports_only:=false}
 : ${_templatedir:=$OPENTOOLSTMPLDIR}
-: ${_portbuild_mode:=normal}
+: ${_portbuild_mode:=pkginstall}
 : ${_portbuild_make_args:=""}
 : ${_portbuild_make_target:=install}
 : ${_prune_userland:=false}
